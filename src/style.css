@@ -1,0 +1,36 @@
+/* Global Theme Variables */
+:root {
+  /* Default Dark Theme */
+  --bg-color: #050505;
+  --text-color: #ffffff;
+  --glass: rgba(255, 255, 255, 0.1);
+  --glass-border: rgba(255, 255, 255, 0.2);
+  --primary-btn: rgba(255, 255, 255, 0.15);
+  --primary-btn-hover: rgba(255, 255, 255, 0.2);
+  --text-gradient: linear-gradient(45deg, #fff, #888);
+  --modal-bg: rgba(20, 20, 20, 0.9);
+}
+
+[data-theme="tokyo-night"] {
+  /* Tokyo Night Theme */
+  --bg-color: #1a1b26;
+  --text-color: #c0caf5;
+  --glass: rgba(122, 162, 247, 0.15);
+  /* Blue-tinted glass */
+  --glass-border: rgba(122, 162, 247, 0.3);
+  --primary-btn: rgba(122, 162, 247, 0.2);
+  --primary-btn-hover: rgba(122, 162, 247, 0.3);
+  --text-gradient: linear-gradient(45deg, #7aa2f7, #bb9af7);
+  /* Blue to Purple */
+  --modal-bg: rgba(26, 27, 38, 0.95);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  transition: background-color 0.3s, color 0.3s;
+}
