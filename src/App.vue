@@ -1,51 +1,44 @@
 <template>
   <div class="app-container">
     <div class="game-wrapper">
-      <ChessScene 
-        v-if="gameStarted" 
+      <ChessScene
+        v-if="gameStarted && gameMode === 'chess'"
         :playerColor="playerColor" 
+        :isLocked="isCameraLocked"
+        :autoRotate="autoRotate"
+        @turn-changed="handleTurnChange"
+      />
+
+      <XiangqiScene
+        v-else-if="gameStarted && gameMode === 'xiangqi'"
+        :playerColor="playerColor"
         :isLocked="isCameraLocked"
         :autoRotate="autoRotate"
         @turn-changed="handleTurnChange"
       />
       
       <!-- Main Menu -->
-      <!-- Main Menu -->
       <div v-else class="menu-overlay">
-        <h1>3D International Chess</h1>
-        
-        <!-- Step 1: Main Options -->
-        <div v-if="menuStep === 'main'" class="menu-content">
+        <h1>3D Board Games</h1>
+        <div class="menu-content">
           <div class="menu-section">
-            <button @click="showHvAIColorSelection" class="menu-btn primary-btn">AI vs Human</button>
+            <button @click="startChessGame" class="menu-btn primary-btn">Play Chess</button>
           </div>
-
           <div class="menu-section">
-            <button @click="startHvH" class="menu-btn primary-btn">Human vs Human</button>
+            <button @click="startXiangqiGame" class="menu-btn primary-btn">Play Xiangqi</button>
           </div>
-
           <button class="settings-icon-btn" @click="showSettings = true">⚙️ Settings</button>
-        </div>
-
-        <!-- Step 2: HvAI Color Selection -->
-        <div v-else-if="menuStep === 'hvai-color'" class="menu-content">
-          <h3>Choose Your Side</h3>
-          <div class="menu-buttons">
-            <button @click="confirmHvAI('white')" class="menu-btn white-btn">Play as White</button>
-            <button @click="confirmHvAI('black')" class="menu-btn black-btn">Play as Black</button>
-          </div>
-          <button class="back-link" @click="menuStep = 'main'">← Back</button>
         </div>
       </div>
 
       <!-- In-Game HUD -->
       <div v-if="gameStarted" class="hud-layer">
         <div class="player-panel top-left">
-          <span class="icon">{{ gameMode === 'hvai' ? '🤖 AI' : '👤 Player 2 (Black)' }}</span>
+          <span class="icon">{{ topLeftPlayerLabel }}</span>
         </div>
         
         <div class="player-panel top-right">
-          <span class="icon">👤 {{ gameMode === 'hvai' ? 'You' : 'Player 1 (White)' }}</span>
+          <span class="icon">{{ topRightPlayerLabel }}</span>
         </div>
         
         <!-- Action Controls -->
@@ -104,12 +97,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import ChessScene from './components/ChessScene.vue';
+import XiangqiScene from './components/XiangqiScene.vue';
 import SettingsModal from './components/SettingsModal.vue';
 
 const gameStarted = ref(false);
-const gameMode = ref<'hvai' | 'hvh'>('hvai'); 
+const gameMode = ref<'chess' | 'xiangqi' | null>(null);
 const playerColor = ref('white'); 
 const isCameraLocked = ref(true);
 const showSettings = ref(false);
@@ -117,25 +111,29 @@ const autoRotate = ref(false);
 const showCameraOptions = ref(false);
 const currentTheme = ref('dark');
 
+const topLeftPlayerLabel = computed(() => {
+  if (gameMode.value === 'xiangqi') return '👤 Player 2 (Black)';
+  return '👤 Player 2 (Black)';
+});
+
+const topRightPlayerLabel = computed(() => {
+  if (gameMode.value === 'xiangqi') return '👤 Player 1 (Red)';
+  return '👤 Player 1 (White)';
+});
+
 watch(currentTheme, (newTheme: string) => {
   document.body.setAttribute('data-theme', newTheme === 'dark' ? '' : 'tokyo-night');
 });
 
-const menuStep = ref<'main' | 'hvai-color'>('main');
-
-const showHvAIColorSelection = () => {
-  menuStep.value = 'hvai-color';
-};
-
-const confirmHvAI = (color: string) => {
-  gameMode.value = 'hvai';
-  playerColor.value = color;
+const startChessGame = () => {
+  gameMode.value = 'chess';
+  playerColor.value = 'white'; 
   isCameraLocked.value = true;
   gameStarted.value = true;
 };
 
-const startHvH = () => {
-  gameMode.value = 'hvh';
+const startXiangqiGame = () => {
+  gameMode.value = 'xiangqi';
   playerColor.value = 'white'; 
   isCameraLocked.value = true;
   gameStarted.value = true;
@@ -143,9 +141,10 @@ const startHvH = () => {
 
 const returnToMenu = () => {
   gameStarted.value = false;
+  gameMode.value = null;
   showSettings.value = false;
   isCameraLocked.value = true;
-  menuStep.value = 'main'; // Reset to main menu
+  playerColor.value = 'white';
 };
 
 const unlockCamera = () => {

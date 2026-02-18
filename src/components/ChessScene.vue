@@ -1,5 +1,31 @@
 <template>
-  <div ref="container" class="scene-container"></div>
+  <div ref="container" class="scene-container">
+    <MoveHistoryPanel
+      :rows="moveHistoryRows"
+      :can-undo="canUndo"
+      @undo="handleUndo"
+      @restart="handleRestart"
+    />
+
+    <KnightDebugPanel
+      :black-scale="blackKnightScale"
+      :black-offset-x="blackKnightOffsetX"
+      :black-offset-y="blackKnightOffsetY"
+      :black-offset-z="blackKnightOffsetZ"
+      :white-scale="whiteKnightScale"
+      :white-offset-x="whiteKnightOffsetX"
+      :white-offset-y="whiteKnightOffsetY"
+      :white-offset-z="whiteKnightOffsetZ"
+      @black-scale="adjustBlackKnightScale"
+      @black-offset-x="adjustBlackKnightOffsetX"
+      @black-offset-y="adjustBlackKnightOffsetY"
+      @black-offset-z="adjustBlackKnightOffsetZ"
+      @white-scale="adjustWhiteKnightScale"
+      @white-offset-x="adjustWhiteKnightOffsetX"
+      @white-offset-y="adjustWhiteKnightOffsetY"
+      @white-offset-z="adjustWhiteKnightOffsetZ"
+    />
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -7,7 +33,51 @@ import { ref, watch, onMounted, onUnmounted } from 'vue';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GameLogic } from '../logic/GameLogic';
+import { AssetManager } from '../utils/AssetManager';
 import gsap from 'gsap';
+import MoveHistoryPanel from './chessscene/MoveHistoryPanel.vue';
+import KnightDebugPanel from './chessscene/KnightDebugPanel.vue';
+import { useMoveHistory } from './chessscene/useMoveHistory';
+import { useKnightDebug } from './chessscene/useKnightDebug';
+import { usePieceAnimation } from './chessscene/usePieceAnimation';
+import { useMoveInteraction } from './chessscene/useMoveInteraction';
+import {
+  BLACK_GRAVEYARD_OFFSET_Y,
+  BLACK_KNIGHT_ROT_X,
+  BLACK_KNIGHT_ROT_Y,
+  BLACK_KNIGHT_ROT_Z,
+  BLACK_PAWN_OFFSET_X,
+  BLACK_PAWN_OFFSET_Y,
+  BLACK_PAWN_OFFSET_Z,
+  BLACK_PAWN_SCALE,
+  BLACK_ROOK_OFFSET_X,
+  BLACK_ROOK_OFFSET_Y,
+  BLACK_ROOK_OFFSET_Z,
+  BLACK_ROOK_SCALE,
+  BOARD_POS_Y,
+  BOARD_SCALE,
+  PIECE_COLORS,
+  WHITE_GRAVEYARD_OFFSET_Y,
+  WHITE_KNIGHT_ROT_X,
+  WHITE_KNIGHT_ROT_Y,
+  WHITE_KNIGHT_ROT_Z,
+  WHITE_PAWN_OFFSET_X,
+  WHITE_PAWN_OFFSET_Y,
+  WHITE_PAWN_OFFSET_Z,
+  WHITE_PAWN_SCALE,
+  WHITE_ROOK_OFFSET_X,
+  WHITE_ROOK_OFFSET_Y,
+  WHITE_ROOK_OFFSET_Z,
+  WHITE_ROOK_SCALE
+} from './chessscene/pieceConstants';
+import { getSquareCenterPosition, resolveSquareIdFromObject } from './chessscene/boardUtils';
+import boardModelUrl from '../assets/Board.glb?url';
+import blackPawnModelUrl from '../assets/bp.glb?url';
+import whitePawnModelUrl from '../assets/wp.glb?url';
+import blackRookModelUrl from '../assets/br.glb?url';
+import whiteRookModelUrl from '../assets/wr.glb?url';
+import blackKnightModelUrl from '../assets/bn.glb?url';
+import whiteKnightModelUrl from '../assets/wn.glb?url';
 
 const props = defineProps<{
   playerColor: string;
@@ -27,18 +97,45 @@ let controls: OrbitControls;
 let raycaster = new THREE.Raycaster();
 let mouse = new THREE.Vector2();
 
-let gameLogic = new GameLogic();
-let pieceMeshes: Map<string, THREE.Mesh> = new Map(); // Algebraic to Mesh mapping
-let selectedSquare: string | null = null;
-let legalMoves: string[] = [];
+let pieceMeshes: Map<string, THREE.Object3D> = new Map(); // Algebraic square to piece object mapping
 let squaresGroup: THREE.Group;
+let highlightGroup: THREE.Group;
+let piecesGroup: THREE.Group;
+let boardModel: THREE.Group | null = null;
+let blackPawnTemplate: THREE.Group | null = null;
+let whitePawnTemplate: THREE.Group | null = null;
+let blackRookTemplate: THREE.Group | null = null;
+let whiteRookTemplate: THREE.Group | null = null;
+let blackKnightTemplate: THREE.Group | null = null;
+let whiteKnightTemplate: THREE.Group | null = null;
 
 // Camera positioning
 const WHITE_POS = new THREE.Vector3(0, 8, 8);
 const BLACK_POS = new THREE.Vector3(0, 8, -8);
 const LOOKAT = new THREE.Vector3(0, 0, 0);
+const gameLogic = new GameLogic();
+const assetManager = new AssetManager();
+const { moveHistoryRows, canUndo, syncMoveHistory } = useMoveHistory(gameLogic);
+const {
+  blackKnightScale,
+  blackKnightOffsetX,
+  blackKnightOffsetY,
+  blackKnightOffsetZ,
+  whiteKnightScale,
+  whiteKnightOffsetX,
+  whiteKnightOffsetY,
+  whiteKnightOffsetZ,
+  adjustBlackKnightScale,
+  adjustBlackKnightOffsetX,
+  adjustBlackKnightOffsetY,
+  adjustBlackKnightOffsetZ,
+  adjustWhiteKnightScale,
+  adjustWhiteKnightOffsetX,
+  adjustWhiteKnightOffsetY,
+  adjustWhiteKnightOffsetZ
+} = useKnightDebug(() => updateKnightTransformsInScene());
 
-const initScene = () => {
+const initScene = async () => {
   if (!container.value) return;
 
   scene = new THREE.Scene();
@@ -57,6 +154,8 @@ const initScene = () => {
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.shadowMap.enabled = true;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.25;
   container.value.appendChild(renderer.domElement);
 
   // Controls (Observer Mode)
@@ -66,21 +165,351 @@ const initScene = () => {
   controls.enabled = false; // Start locked
 
   // Lights
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
   scene.add(ambientLight);
 
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-  directionalLight.position.set(5, 10, 5);
-  directionalLight.castShadow = true;
-  scene.add(directionalLight);
+  const hemiLight = new THREE.HemisphereLight(0xe8f2ff, 0x604c3f, 0.55);
+  scene.add(hemiLight);
 
-  // Placeholder Board
+  const keyLight = new THREE.DirectionalLight(0xffffff, 1.35);
+  keyLight.position.set(6, 12, 8);
+  keyLight.castShadow = true;
+  scene.add(keyLight);
+
+  const fillLight = new THREE.DirectionalLight(0xfff2e6, 0.55);
+  fillLight.position.set(-8, 6, -6);
+  scene.add(fillLight);
+
+  // Board interaction layer + model visual
   createPlaceholderBoard();
+  createHighlightLayer();
+  piecesGroup = new THREE.Group();
+  scene.add(piecesGroup);
+  await loadBoardModel();
+  await loadBlackPawnTemplate();
+  await loadWhitePawnTemplate();
+  await loadBlackRookTemplate();
+  await loadWhiteRookTemplate();
+  await loadBlackKnightTemplate();
+  await loadWhiteKnightTemplate();
   
   // Placeholder Pieces
   createPlaceholderPieces();
+  syncMoveHistory();
 
   animate();
+};
+
+const handleUndo = () => {
+  const undone = gameLogic.undoMove();
+  if (!undone) return;
+
+  cancelSelection();
+  createPlaceholderPieces();
+  syncMoveHistory();
+  emit('turn-changed', gameLogic.getTurn());
+};
+
+const handleRestart = () => {
+  gameLogic.resetGame();
+  cancelSelection();
+  createPlaceholderPieces();
+  syncMoveHistory();
+  emit('turn-changed', gameLogic.getTurn());
+};
+
+const loadBoardModel = async () => {
+  try {
+    boardModel = await assetManager.loadModel(boardModelUrl);
+    boardModel.position.set(0, BOARD_POS_Y, 0);
+    boardModel.scale.setScalar(BOARD_SCALE);
+    boardModel.traverse((obj) => {
+      if ((obj as THREE.Mesh).isMesh) {
+        const mesh = obj as THREE.Mesh;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+      }
+    });
+    scene.add(boardModel);
+  } catch (err) {
+    console.warn('Failed to load board model, fallback to placeholder board only.', err);
+  }
+};
+
+const loadBlackPawnTemplate = async () => {
+  try {
+    blackPawnTemplate = await assetManager.loadModel(blackPawnModelUrl);
+    blackPawnTemplate.traverse((obj) => {
+      if ((obj as THREE.Mesh).isMesh) {
+        const mesh = obj as THREE.Mesh;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+      }
+    });
+  } catch (err) {
+    blackPawnTemplate = null;
+    console.warn('Failed to load black pawn model, fallback to placeholder piece.', err);
+  }
+};
+
+const loadWhitePawnTemplate = async () => {
+  try {
+    whitePawnTemplate = await assetManager.loadModel(whitePawnModelUrl);
+    whitePawnTemplate.traverse((obj) => {
+      if ((obj as THREE.Mesh).isMesh) {
+        const mesh = obj as THREE.Mesh;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+      }
+    });
+  } catch (err) {
+    whitePawnTemplate = null;
+    console.warn('Failed to load white pawn model, fallback to placeholder piece.', err);
+  }
+};
+
+const loadBlackRookTemplate = async () => {
+  try {
+    blackRookTemplate = await assetManager.loadModel(blackRookModelUrl);
+    blackRookTemplate.traverse((obj) => {
+      if ((obj as THREE.Mesh).isMesh) {
+        const mesh = obj as THREE.Mesh;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+      }
+    });
+  } catch (err) {
+    blackRookTemplate = null;
+    console.warn('Failed to load black rook model, fallback to placeholder piece.', err);
+  }
+};
+
+const loadWhiteRookTemplate = async () => {
+  try {
+    whiteRookTemplate = await assetManager.loadModel(whiteRookModelUrl);
+    whiteRookTemplate.traverse((obj) => {
+      if ((obj as THREE.Mesh).isMesh) {
+        const mesh = obj as THREE.Mesh;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+      }
+    });
+  } catch (err) {
+    whiteRookTemplate = null;
+    console.warn('Failed to load white rook model, fallback to placeholder piece.', err);
+  }
+};
+
+const loadBlackKnightTemplate = async () => {
+  try {
+    blackKnightTemplate = await assetManager.loadModel(blackKnightModelUrl);
+    blackKnightTemplate.traverse((obj) => {
+      if ((obj as THREE.Mesh).isMesh) {
+        const mesh = obj as THREE.Mesh;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+      }
+    });
+  } catch (err) {
+    blackKnightTemplate = null;
+    console.warn('Failed to load black knight model, fallback to placeholder piece.', err);
+  }
+};
+
+const loadWhiteKnightTemplate = async () => {
+  try {
+    whiteKnightTemplate = await assetManager.loadModel(whiteKnightModelUrl);
+    whiteKnightTemplate.traverse((obj) => {
+      if ((obj as THREE.Mesh).isMesh) {
+        const mesh = obj as THREE.Mesh;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+      }
+    });
+  } catch (err) {
+    whiteKnightTemplate = null;
+    console.warn('Failed to load white knight model, fallback to placeholder piece.', err);
+  }
+};
+
+const applyBlackPawnTransform = (pieceObject: THREE.Object3D, squareId: string) => {
+  const squarePos = getSquareCenterPosition(squareId);
+  pieceObject.position.set(
+    squarePos.x + BLACK_PAWN_OFFSET_X,
+    BLACK_PAWN_OFFSET_Y,
+    squarePos.z + BLACK_PAWN_OFFSET_Z
+  );
+  pieceObject.scale.setScalar(BLACK_PAWN_SCALE);
+};
+
+const applyWhitePawnTransform = (pieceObject: THREE.Object3D, squareId: string) => {
+  const squarePos = getSquareCenterPosition(squareId);
+  pieceObject.position.set(
+    squarePos.x + WHITE_PAWN_OFFSET_X,
+    WHITE_PAWN_OFFSET_Y,
+    squarePos.z + WHITE_PAWN_OFFSET_Z
+  );
+  pieceObject.scale.setScalar(WHITE_PAWN_SCALE);
+};
+
+const applyWhiteRookTransform = (pieceObject: THREE.Object3D, squareId: string) => {
+  const squarePos = getSquareCenterPosition(squareId);
+  pieceObject.position.set(
+    squarePos.x + WHITE_ROOK_OFFSET_X,
+    WHITE_ROOK_OFFSET_Y,
+    squarePos.z + WHITE_ROOK_OFFSET_Z
+  );
+  pieceObject.scale.setScalar(WHITE_ROOK_SCALE);
+};
+
+const applyBlackRookTransform = (pieceObject: THREE.Object3D, squareId: string) => {
+  const squarePos = getSquareCenterPosition(squareId);
+  pieceObject.position.set(
+    squarePos.x + BLACK_ROOK_OFFSET_X,
+    BLACK_ROOK_OFFSET_Y,
+    squarePos.z + BLACK_ROOK_OFFSET_Z
+  );
+  pieceObject.scale.setScalar(BLACK_ROOK_SCALE);
+};
+
+const applyBlackKnightTransform = (pieceObject: THREE.Object3D, squareId: string) => {
+  const squarePos = getSquareCenterPosition(squareId);
+  pieceObject.position.set(
+    squarePos.x + blackKnightOffsetX.value,
+    blackKnightOffsetY.value,
+    squarePos.z + blackKnightOffsetZ.value
+  );
+  pieceObject.scale.setScalar(blackKnightScale.value);
+  pieceObject.rotation.set(BLACK_KNIGHT_ROT_X, BLACK_KNIGHT_ROT_Y, BLACK_KNIGHT_ROT_Z, 'ZYX');
+};
+
+const applyWhiteKnightTransform = (pieceObject: THREE.Object3D, squareId: string) => {
+  const squarePos = getSquareCenterPosition(squareId);
+  pieceObject.position.set(
+    squarePos.x + whiteKnightOffsetX.value,
+    whiteKnightOffsetY.value,
+    squarePos.z + whiteKnightOffsetZ.value
+  );
+  pieceObject.scale.setScalar(whiteKnightScale.value);
+  pieceObject.rotation.set(WHITE_KNIGHT_ROT_X, WHITE_KNIGHT_ROT_Y, WHITE_KNIGHT_ROT_Z, 'ZYX');
+};
+
+const createPieceObjectForSquare = (pieceType: string, pieceColor: string, squareId: string): THREE.Object3D => {
+  let pieceObject: THREE.Object3D;
+
+  if (pieceColor === 'b' && pieceType === 'p' && blackPawnTemplate) {
+    pieceObject = blackPawnTemplate.clone(true);
+    pieceObject.userData = { square: squareId, color: pieceColor, type: pieceType, modelType: 'blackPawnGlb' };
+    pieceObject.traverse((obj) => {
+      obj.userData = { square: squareId, color: pieceColor, type: pieceType, modelType: 'blackPawnGlb' };
+    });
+    applyBlackPawnTransform(pieceObject, squareId);
+    return pieceObject;
+  }
+
+  if (pieceColor === 'b' && pieceType === 'r' && blackRookTemplate) {
+    pieceObject = blackRookTemplate.clone(true);
+    pieceObject.userData = { square: squareId, color: pieceColor, type: pieceType, modelType: 'blackRookGlb' };
+    pieceObject.traverse((obj) => {
+      obj.userData = { square: squareId, color: pieceColor, type: pieceType, modelType: 'blackRookGlb' };
+    });
+    applyBlackRookTransform(pieceObject, squareId);
+    return pieceObject;
+  }
+
+  if (pieceColor === 'w' && pieceType === 'p' && whitePawnTemplate) {
+    pieceObject = whitePawnTemplate.clone(true);
+    pieceObject.userData = { square: squareId, color: pieceColor, type: pieceType, modelType: 'whitePawnGlb' };
+    pieceObject.traverse((obj) => {
+      obj.userData = { square: squareId, color: pieceColor, type: pieceType, modelType: 'whitePawnGlb' };
+    });
+    applyWhitePawnTransform(pieceObject, squareId);
+    return pieceObject;
+  }
+
+  if (pieceColor === 'w' && pieceType === 'r' && whiteRookTemplate) {
+    pieceObject = whiteRookTemplate.clone(true);
+    pieceObject.userData = { square: squareId, color: pieceColor, type: pieceType, modelType: 'whiteRookGlb' };
+    pieceObject.traverse((obj) => {
+      obj.userData = { square: squareId, color: pieceColor, type: pieceType, modelType: 'whiteRookGlb' };
+    });
+    applyWhiteRookTransform(pieceObject, squareId);
+    return pieceObject;
+  }
+
+  if (pieceColor === 'b' && pieceType === 'n' && blackKnightTemplate) {
+    pieceObject = blackKnightTemplate.clone(true);
+    pieceObject.userData = { square: squareId, color: pieceColor, type: pieceType, modelType: 'blackKnightGlb' };
+    pieceObject.traverse((obj) => {
+      obj.userData = { square: squareId, color: pieceColor, type: pieceType, modelType: 'blackKnightGlb' };
+    });
+    applyBlackKnightTransform(pieceObject, squareId);
+    return pieceObject;
+  }
+
+  if (pieceColor === 'w' && pieceType === 'n' && whiteKnightTemplate) {
+    pieceObject = whiteKnightTemplate.clone(true);
+    pieceObject.userData = { square: squareId, color: pieceColor, type: pieceType, modelType: 'whiteKnightGlb' };
+    pieceObject.traverse((obj) => {
+      obj.userData = { square: squareId, color: pieceColor, type: pieceType, modelType: 'whiteKnightGlb' };
+    });
+    applyWhiteKnightTransform(pieceObject, squareId);
+    return pieceObject;
+  }
+
+  const geometry = new THREE.CylinderGeometry(0.3, 0.35, 0.8, 20);
+  const material = new THREE.MeshStandardMaterial({
+    color: pieceColor === PIECE_COLORS.WHITE ? 0xffffff : 0x333333,
+    metalness: 0.4,
+    roughness: 0.3
+  });
+  const mesh = new THREE.Mesh(geometry, material);
+  const col = squareId.charCodeAt(0) - 97;
+  const row = 8 - parseInt(squareId.slice(1), 10);
+  mesh.position.set(col - 3.5, 0.4, row - 3.5);
+  mesh.castShadow = true;
+  mesh.userData = { square: squareId, color: pieceColor, type: pieceType };
+  return mesh;
+};
+
+const getGraveyardPosition = (capturedColor: string, capturedIndex: number) => {
+  const isWhitePiece = capturedColor === PIECE_COLORS.WHITE;
+  const baseX = isWhitePiece ? -6 : 6;
+  const baseZ = isWhitePiece ? -2 : 2;
+  const col = capturedIndex % 4;
+  const row = Math.floor(capturedIndex / 4);
+  const x = baseX + (col - 1.5) * 0.45;
+  const zDirection = isWhitePiece ? -1 : 1;
+  const z = baseZ + row * 0.45 * zDirection;
+  const y = isWhitePiece ? WHITE_GRAVEYARD_OFFSET_Y : BLACK_GRAVEYARD_OFFSET_Y;
+  return new THREE.Vector3(x, y, z);
+};
+
+const rebuildGraveyardFromHistory = () => {
+  const history = gameLogic.getHistory() as Array<{ color: string; captured?: string; to: string }>;
+  const capturedCount = { w: 0, b: 0 };
+
+  history.forEach((move) => {
+    if (!move.captured) return;
+    const capturedColor = move.color === PIECE_COLORS.WHITE ? PIECE_COLORS.BLACK : PIECE_COLORS.WHITE;
+    const index = capturedColor === PIECE_COLORS.WHITE ? capturedCount.w++ : capturedCount.b++;
+    const capturedPiece = createPieceObjectForSquare(move.captured, capturedColor, move.to);
+    capturedPiece.position.copy(getGraveyardPosition(capturedColor, index));
+    capturedPiece.userData.isCaptured = true;
+    piecesGroup.add(capturedPiece);
+  });
+};
+
+const updateKnightTransformsInScene = () => {
+  pieceMeshes.forEach((pieceObject) => {
+    const squareId = pieceObject.userData.square as string | undefined;
+    if (!squareId) return;
+    if (pieceObject.userData.modelType === 'blackKnightGlb') {
+      applyBlackKnightTransform(pieceObject, squareId);
+    } else if (pieceObject.userData.modelType === 'whiteKnightGlb') {
+      applyWhiteKnightTransform(pieceObject, squareId);
+    }
+  });
 };
 
 const createPlaceholderBoard = () => {
@@ -92,7 +521,9 @@ const createPlaceholderBoard = () => {
       const geometry = new THREE.PlaneGeometry(1, 1);
       const isWhite = (r + c) % 2 === 0;
       const material = new THREE.MeshStandardMaterial({
-        color: isWhite ? 0xdddddd : 0x222222,
+        color: isWhite ? 0xffffff : 0x000000,
+        transparent: true,
+        opacity: 0.05,
       });
       const square = new THREE.Mesh(geometry, material);
       square.rotation.x = -Math.PI / 2;
@@ -109,10 +540,74 @@ const createPlaceholderBoard = () => {
   scene.add(squaresGroup);
 };
 
+const createHighlightLayer = () => {
+  highlightGroup = new THREE.Group();
+  scene.add(highlightGroup);
+};
+
+const getTargetPositionForPiece = (pieceObject: THREE.Object3D, squareId: string) => {
+  const col = squareId.charCodeAt(0) - 97;
+  const row = 8 - parseInt(squareId.slice(1), 10);
+
+  if (pieceObject.userData.modelType === 'blackPawnGlb') {
+    return new THREE.Vector3(
+      col - 3.5 + BLACK_PAWN_OFFSET_X,
+      BLACK_PAWN_OFFSET_Y,
+      row - 3.5 + BLACK_PAWN_OFFSET_Z
+    );
+  }
+
+  if (pieceObject.userData.modelType === 'blackRookGlb') {
+    return new THREE.Vector3(
+      col - 3.5 + BLACK_ROOK_OFFSET_X,
+      BLACK_ROOK_OFFSET_Y,
+      row - 3.5 + BLACK_ROOK_OFFSET_Z
+    );
+  }
+
+  if (pieceObject.userData.modelType === 'whitePawnGlb') {
+    return new THREE.Vector3(
+      col - 3.5 + WHITE_PAWN_OFFSET_X,
+      WHITE_PAWN_OFFSET_Y,
+      row - 3.5 + WHITE_PAWN_OFFSET_Z
+    );
+  }
+
+  if (pieceObject.userData.modelType === 'whiteRookGlb') {
+    return new THREE.Vector3(
+      col - 3.5 + WHITE_ROOK_OFFSET_X,
+      WHITE_ROOK_OFFSET_Y,
+      row - 3.5 + WHITE_ROOK_OFFSET_Z
+    );
+  }
+
+  if (pieceObject.userData.modelType === 'blackKnightGlb') {
+    return new THREE.Vector3(
+      col - 3.5 + blackKnightOffsetX.value,
+      blackKnightOffsetY.value,
+      row - 3.5 + blackKnightOffsetZ.value
+    );
+  }
+
+  if (pieceObject.userData.modelType === 'whiteKnightGlb') {
+    return new THREE.Vector3(
+      col - 3.5 + whiteKnightOffsetX.value,
+      whiteKnightOffsetY.value,
+      row - 3.5 + whiteKnightOffsetZ.value
+    );
+  }
+
+  return new THREE.Vector3(col - 3.5, 0.4, row - 3.5);
+};
+
 const createPlaceholderPieces = () => {
-  // Clear existing
-  pieceMeshes.forEach(m => scene.remove(m));
+  // Clear existing rendered pieces, including captured ones in graveyard.
   pieceMeshes.clear();
+  while (piecesGroup.children.length > 0) {
+    const child = piecesGroup.children[0];
+    if (!child) break;
+    piecesGroup.remove(child);
+  }
 
   const board = gameLogic.getBoard();
   board.forEach((row, r) => {
@@ -121,274 +616,41 @@ const createPlaceholderPieces = () => {
         const file = String.fromCharCode(97 + c);
         const rank = 8 - r;
         const squareId = `${file}${rank}`;
-
-        const geometry = new THREE.CylinderGeometry(0.3, 0.35, 0.8, 20);
-        const material = new THREE.MeshStandardMaterial({
-          color: piece.color === 'w' ? 0xffffff : 0x333333,
-          metalness: 0.4,
-          roughness: 0.3
-        });
-        const mesh = new THREE.Mesh(geometry, material);
-        mesh.position.set(c - 3.5, 0.4, r - 3.5);
-        mesh.castShadow = true;
-        mesh.userData = { square: squareId, color: piece.color };
-        
-        scene.add(mesh);
-        pieceMeshes.set(squareId, mesh);
+        const pieceObject = createPieceObjectForSquare(piece.type, piece.color, squareId);
+        piecesGroup.add(pieceObject);
+        pieceMeshes.set(squareId, pieceObject);
       }
     });
   });
+
+  rebuildGraveyardFromHistory();
 };
 
-const onMouseDown = (event: MouseEvent) => {
-  if (!props.isLocked) return; // Disable interaction in observer mode
+const { animateMove } = usePieceAnimation({
+  pieceMeshes,
+  getTargetPositionForPiece,
+  whiteGraveyardY: WHITE_GRAVEYARD_OFFSET_Y,
+  blackGraveyardY: BLACK_GRAVEYARD_OFFSET_Y
+});
 
-  const bounds = renderer.domElement.getBoundingClientRect();
-  mouse.x = ((event.clientX - bounds.left) / bounds.width) * 2 - 1;
-  mouse.y = -((event.clientY - bounds.top) / bounds.height) * 2 + 1;
-
-  raycaster.setFromCamera(mouse, camera);
-
-  // Check board squares first for target, then pieces for selection
-  const intersects = raycaster.intersectObjects([...squaresGroup.children, ...pieceMeshes.values()]);
-  if (intersects.length === 0) {
-    cancelSelection();
-    return;
+const { onMouseDown, onMouseMove, cancelSelection } = useMoveInteraction({
+  gameLogic,
+  pieceMeshes,
+  mouse,
+  raycaster,
+  getRenderer: () => renderer,
+  getCamera: () => camera,
+  getControls: () => controls,
+  getSquaresGroup: () => squaresGroup,
+  getHighlightGroup: () => highlightGroup,
+  isLocked: () => props.isLocked,
+  resolveSquareIdFromObject,
+  onMoveApplied: (move) => {
+    animateMove(move);
+    syncMoveHistory();
+    emit('turn-changed', gameLogic.getTurn());
   }
-
-  const clickedObject = intersects[0].object;
-  const squareId = clickedObject.name || (clickedObject as THREE.Mesh).userData.square;
-  
-  if (!squareId) return;
-
-  if (selectedSquare) {
-    if (squareId === selectedSquare) {
-      cancelSelection();
-    } else {
-      // Try move
-      const move = gameLogic.makeMove(selectedSquare, squareId);
-      if (move) {
-        animateMove(move);
-        cancelSelection();
-        
-        // Emit turn change to parent for Auto-Rotate handling
-        emit('turn-changed', gameLogic.getTurn());
-      } else {
-        // Recalculate or switch selection
-        handleNewSelection(squareId);
-      }
-    }
-  } else {
-    handleNewSelection(squareId);
-  }
-};
-
-const handleNewSelection = (squareId: string) => {
-  const board = gameLogic.getBoard();
-  const col = squareId.charCodeAt(0) - 97;
-  const row = 8 - parseInt(squareId[1]);
-  const piece = board[row][col];
-
-  if (piece && piece.color === gameLogic.getTurn()) {
-    selectedSquare = squareId;
-    legalMoves = gameLogic.getLegalMoves(squareId);
-    
-    resetSquareHighlights();
-    highlightSquare(squareId, 0x00ff00); // Select green
-    legalMoves.forEach(m => highlightSquare(m, 0x00aaff)); // Targeted blue
-  } else {
-    cancelSelection();
-  }
-};
-
-const onMouseMove = (event: MouseEvent) => {
-  if (!props.isLocked || !selectedSquare) return;
-
-  const bounds = renderer.domElement.getBoundingClientRect();
-  mouse.x = ((event.clientX - bounds.left) / bounds.width) * 2 - 1;
-  mouse.y = -((event.clientY - bounds.top) / bounds.height) * 2 + 1;
-
-  raycaster.setFromCamera(mouse, camera);
-  const intersects = raycaster.intersectObjects(squaresGroup.children);
-  
-  // Clear previous hover
-  resetHovers();
-
-  if (intersects.length > 0) {
-    const squareId = intersects[0].object.name;
-    if (squareId && legalMoves.includes(squareId)) {
-      showHoverBorder(squareId);
-    }
-  }
-};
-
-const showHoverBorder = (squareId: string) => {
-  const square = squaresGroup.children.find(s => s.name === squareId) as THREE.Mesh;
-  if (square) {
-    (square.material as THREE.MeshStandardMaterial).emissive.setHex(0xffffff);
-    (square.material as THREE.MeshStandardMaterial).emissiveIntensity = 0.8;
-  }
-};
-
-const resetHovers = () => {
-  squaresGroup.children.forEach(s => {
-    const squareId = s.name;
-    const material = (s as THREE.Mesh).material as THREE.MeshStandardMaterial;
-
-    if (squareId === selectedSquare) {
-      // Restore Selected Color (Green)
-      material.emissive.setHex(0x00ff00);
-      material.emissiveIntensity = 0.5;
-    } else if (legalMoves.includes(squareId)) {
-      // Restore Legal Move Color (Blue)
-      material.emissive.setHex(0x00aaff);
-      material.emissiveIntensity = 0.5;
-    } else {
-      // Reset to Normal
-      material.emissive.setHex(0x000000);
-    }
-  });
-};
-
-const cancelSelection = () => {
-  selectedSquare = null;
-  legalMoves = [];
-  resetSquareHighlights();
-};
-
-const highlightSquare = (squareId: string, color: number) => {
-  const square = squaresGroup.children.find(s => s.name === squareId) as THREE.Mesh;
-  if (square) {
-    (square.material as THREE.MeshStandardMaterial).emissive.setHex(color);
-    (square.material as THREE.MeshStandardMaterial).emissiveIntensity = 0.5;
-  }
-};
-
-const resetSquareHighlights = () => {
-  squaresGroup.children.forEach(s => {
-    const mesh = s as THREE.Mesh;
-    (mesh.material as THREE.MeshStandardMaterial).emissive.setHex(0x000000);
-  });
-};
-
-const animateMove = (move: any) => {
-  const { from, to, piece: pieceType, captured, flags } = move;
-  const pieceMesh = pieceMeshes.get(from);
-  if (!pieceMesh) return;
-
-  const toCol = to.charCodeAt(0) - 97;
-  const toRow = 8 - parseInt(to[1]);
-  const targetPos = new THREE.Vector3(toCol - 3.5, 0.4, toRow - 3.5);
-
-  // 1. Handle Capture (Jump Out)
-  if (captured) {
-    const capturedPiece = pieceMeshes.get(to);
-    if (capturedPiece) {
-      animateCapture(capturedPiece, to);
-    }
-  }
-
-  // 2. Handle Castling (King Slides, Rook Jumps)
-  if (flags.includes('k') || flags.includes('q')) {
-    animateCastling(move, pieceMesh, targetPos);
-    return;
-  }
-
-  // 3. Handle Knight (Jump)
-  if (pieceType === 'n') {
-    animateJump(pieceMesh, targetPos, from, to);
-    return;
-  }
-
-  // 4. Standard Slide
-  animateSlide(pieceMesh, targetPos, from, to);
-};
-
-const animateCapture = (mesh: THREE.Mesh, squareId: string) => {
-  const isWhitePiece = mesh.userData.color === 'w';
-  
-  // If Player is White:
-  //   - Black Graveyard (Captured Black pieces): Right-Side Bottom (x > 0, z > 0)
-  //   - White Graveyard (Captured White pieces): Left-Side Top (x < 0, z < 0)
-  // Just a simple heuristic for Phase 0 based on user request:
-  // "Black Graveyard: Right side of board, bottom half" -> x > 4, z > 0
-  
-  const graveyardX = isWhitePiece ? -6 : 6; 
-  const graveyardZ = isWhitePiece ? -2 : 2; 
-
-  gsap.to(mesh.position, {
-    duration: 0.8,
-    x: graveyardX + (Math.random() - 0.5), 
-    y: 0.2, // Land on table
-    z: graveyardZ + (Math.random() - 0.5),
-    
-    keyframes: {
-      "0%": { y: 0.4 },
-      "50%": { y: 3 }, // High arc
-      "100%": { y: 0.2 } // Land
-    },
-    ease: "power1.inOut"
-  });
-  
-  pieceMeshes.delete(squareId);
-};
-
-const animateJump = (mesh: THREE.Mesh, targetPos: THREE.Vector3, from: string, to: string) => {
-  gsap.to(mesh.position, {
-    duration: 0.7,
-    x: targetPos.x,
-    z: targetPos.z,
-    ease: "power1.inOut",
-  });
-  
-  gsap.to(mesh.position, {
-    duration: 0.35,
-    y: 2.5,
-    yoyo: true,
-    repeat: 1,
-    ease: "power2.out"
-  });
-
-  updatePieceMap(mesh, from, to);
-};
-
-const animateSlide = (mesh: THREE.Mesh, targetPos: THREE.Vector3, from: string, to: string) => {
-  gsap.to(mesh.position, {
-    duration: 0.5,
-    x: targetPos.x,
-    z: targetPos.z,
-    ease: "power2.inOut"
-  });
-  updatePieceMap(mesh, from, to);
-};
-
-const animateCastling = (move: any, kingMesh: THREE.Mesh, kingTargetPos: THREE.Vector3) => {
-  // 1. Move King (Slide)
-  animateSlide(kingMesh, kingTargetPos, move.from, move.to);
-
-  // 2. Find and Move Rook (Jump)
-  const isKingside = move.flags.includes('k');
-  const rank = move.color === 'w' ? '1' : '8';
-  const rookFromSquare = isKingside ? `h${rank}` : `a${rank}`;
-  const rookToSquare = isKingside ? `f${rank}` : `d${rank}`;
-
-  const rookMesh = pieceMeshes.get(rookFromSquare);
-  if (rookMesh) {
-    const toCol = rookToSquare.charCodeAt(0) - 97;
-    const toRow = 8 - parseInt(rookToSquare[1]);
-    const rookTargetPos = new THREE.Vector3(toCol - 3.5, 0.4, toRow - 3.5);
-
-    setTimeout(() => {
-       animateJump(rookMesh, rookTargetPos, rookFromSquare, rookToSquare);
-    }, 100);
-  }
-};
-
-const updatePieceMap = (mesh: THREE.Mesh, from: string, to: string) => {
-  pieceMeshes.delete(from);
-  pieceMeshes.set(to, mesh);
-  mesh.userData.square = to;
-};
+});
 
 const resetCameraPosition = () => {
   const targetPos = props.playerColor === 'white' ? WHITE_POS : BLACK_POS;
@@ -477,6 +739,7 @@ onUnmounted(() => {
 
 <style scoped>
 .scene-container {
+  position: relative;
   width: 100%;
   height: 100%;
   display: flex;

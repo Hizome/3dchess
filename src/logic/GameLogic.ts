@@ -23,6 +23,14 @@ export class GameLogic {
         }
     }
 
+    public undoMove() {
+        return this.game.undo();
+    }
+
+    public resetGame() {
+        this.game.reset();
+    }
+
     public isGameOver() {
         return this.game.isGameOver();
     }
@@ -33,5 +41,9 @@ export class GameLogic {
             return moves.map(m => m.to);
         }
         return this.game.moves();
+    }
+
+    public getHistory() {
+        return this.game.history({ verbose: true });
     }
 }
