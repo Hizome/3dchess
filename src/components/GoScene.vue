@@ -1,5 +1,15 @@
 <template>
-  <div ref="container" class="scene-container"></div>
+  <div ref="container" class="scene-container">
+    <GoInfoPanel
+      :can-undo="canUndo"
+      :black-area="blackArea"
+      :white-area="whiteArea"
+      :black-captures="blackCaptures"
+      :white-captures="whiteCaptures"
+      @undo="handleUndo"
+      @restart="handleRestart"
+    />
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -10,6 +20,7 @@ import gsap from 'gsap';
 import { GoGameLogic } from '../logic/GoGameLogic';
 import { AssetManager } from '../utils/AssetManager';
 import goBoardModelUrl from '../assets/go_board.glb?url';
+import GoInfoPanel from './goscene/GoInfoPanel.vue';
 
 const props = defineProps<{
   playerColor: string;
@@ -29,15 +40,22 @@ const GO_BOARD_OFFSET_X = 0;
 const GO_BOARD_OFFSET_Y = -2.3;
 const GO_BOARD_OFFSET_Z = 0;
 const GO_STONE_Y = 0.08;
+const GO_SCENE_SCALE = 1.5;
 
 const container = ref<HTMLElement | null>(null);
 const gameLogic = new GoGameLogic(BOARD_SIZE);
 const assetManager = new AssetManager();
+const canUndo = ref(false);
+const blackArea = ref(0);
+const whiteArea = ref(0);
+const blackCaptures = ref(0);
+const whiteCaptures = ref(0);
 
 let scene: THREE.Scene;
 let camera: THREE.PerspectiveCamera;
 let renderer: THREE.WebGLRenderer;
 let controls: OrbitControls;
+let playfieldGroup: THREE.Group;
 let boardGroup: THREE.Group;
 let boardModel: THREE.Group | null = null;
 let interactionGroup: THREE.Group;
@@ -65,17 +83,6 @@ const whiteStoneMaterial = new THREE.MeshStandardMaterial({
 });
 
 const pointIdFrom = (x: number, y: number) => `${x},${y}`;
-const STAR_POINTS: string[] = [
-  pointIdFrom(3, 3),
-  pointIdFrom(9, 3),
-  pointIdFrom(15, 3),
-  pointIdFrom(3, 9),
-  pointIdFrom(9, 9),
-  pointIdFrom(15, 9),
-  pointIdFrom(3, 15),
-  pointIdFrom(9, 15),
-  pointIdFrom(15, 15)
-];
 
 const parsePointId = (pointId: string) => {
   const [xRaw, yRaw] = pointId.split(',');
@@ -131,7 +138,7 @@ const createBoard = () => {
     boardGroup.add(new THREE.Line(horizontal, lineMaterial));
   }
 
-  scene.add(boardGroup);
+  playfieldGroup.add(boardGroup);
 };
 
 const loadBoardModel = async () => {
@@ -146,7 +153,7 @@ const loadBoardModel = async () => {
     });
     boardModel.position.set(GO_BOARD_OFFSET_X, GO_BOARD_OFFSET_Y, GO_BOARD_OFFSET_Z);
     boardModel.scale.setScalar(GO_BOARD_SCALE);
-    scene.add(boardModel);
+    playfieldGroup.add(boardModel);
   } catch (err) {
     boardModel = null;
     console.warn('Failed to load go board model, fallback to procedural board.', err);
@@ -169,7 +176,7 @@ const createInteractionLayer = () => {
       interactionGroup.add(marker);
     }
   }
-  scene.add(interactionGroup);
+  playfieldGroup.add(interactionGroup);
 };
 
 const createHoverIndicator = () => {
@@ -185,7 +192,7 @@ const createHoverIndicator = () => {
   );
   hoverIndicator.rotation.x = -Math.PI / 2;
   hoverIndicator.visible = false;
-  scene.add(hoverIndicator);
+  playfieldGroup.add(hoverIndicator);
 };
 
 const createStoneMeshAt = (pointId: string, color: 'b' | 'w', animated = true) => {
@@ -209,22 +216,58 @@ const createStoneMeshAt = (pointId: string, color: 'b' | 'w', animated = true) =
   }
 };
 
-const seedStarPointStones = () => {
-  gameLogic.resetGame();
-  stoneMeshes.forEach((mesh) => stonesGroup.remove(mesh));
-  stoneMeshes.clear();
-
-  STAR_POINTS.forEach((pointId) => {
-    const move = gameLogic.makeMove(pointId);
-    if (!move) return;
-    createStoneMeshAt(pointId, move.color, false);
+const clearStoneMeshes = () => {
+  stoneMeshes.forEach((mesh) => {
+    stonesGroup.remove(mesh);
   });
+  stoneMeshes.clear();
+};
+
+const rebuildStonesFromLogic = () => {
+  clearStoneMeshes();
+  gameLogic.getAllStones().forEach((color, pointId) => {
+    createStoneMeshAt(pointId, color, false);
+  });
+};
+
+const syncGoInfo = () => {
+  canUndo.value = gameLogic.canUndo();
+  const area = gameLogic.getAreaCounts();
+  const captures = gameLogic.getCaptureCounts();
+  blackArea.value = area.b;
+  whiteArea.value = area.w;
+  blackCaptures.value = captures.b;
+  whiteCaptures.value = captures.w;
 };
 
 const placeStoneAt = (pointId: string) => {
   const move = gameLogic.makeMove(pointId);
   if (!move) return;
+
+  move.captured.forEach((capturedPointId) => {
+    const capturedMesh = stoneMeshes.get(capturedPointId);
+    if (!capturedMesh) return;
+    stonesGroup.remove(capturedMesh);
+    stoneMeshes.delete(capturedPointId);
+  });
+
   createStoneMeshAt(pointId, move.color, true);
+  syncGoInfo();
+  emit('turn-changed', gameLogic.getTurn());
+};
+
+const handleUndo = () => {
+  const undone = gameLogic.undoMove();
+  if (!undone) return;
+  rebuildStonesFromLogic();
+  syncGoInfo();
+  emit('turn-changed', gameLogic.getTurn());
+};
+
+const handleRestart = () => {
+  gameLogic.resetGame();
+  rebuildStonesFromLogic();
+  syncGoInfo();
   emit('turn-changed', gameLogic.getTurn());
 };
 
@@ -317,6 +360,9 @@ const initScene = async () => {
 
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x0a0a0a);
+  playfieldGroup = new THREE.Group();
+  playfieldGroup.scale.setScalar(GO_SCENE_SCALE);
+  scene.add(playfieldGroup);
 
   camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
   camera.position.copy(props.playerColor === 'white' ? WHITE_POS : BLACK_POS);
@@ -352,12 +398,13 @@ const initScene = async () => {
   createHoverIndicator();
 
   stonesGroup = new THREE.Group();
-  scene.add(stonesGroup);
-  seedStarPointStones();
+  playfieldGroup.add(stonesGroup);
+  gameLogic.resetGame();
+  rebuildStonesFromLogic();
+  syncGoInfo();
 
   renderer.domElement.addEventListener('mousedown', onMouseDown);
   renderer.domElement.addEventListener('mousemove', onMouseMove);
-
   emit('turn-changed', gameLogic.getTurn());
   animate();
 };
