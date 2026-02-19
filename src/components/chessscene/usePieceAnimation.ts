@@ -15,14 +15,23 @@ type UsePieceAnimationOptions = {
   getTargetPositionForPiece: (pieceObject: THREE.Object3D, squareId: string) => THREE.Vector3;
   whiteGraveyardY: number;
   blackGraveyardY: number;
+  getCaptureGraveyardPosition?: (mesh: THREE.Object3D) => THREE.Vector3;
 };
 
 export const usePieceAnimation = ({
   pieceMeshes,
   getTargetPositionForPiece,
   whiteGraveyardY,
-  blackGraveyardY
+  blackGraveyardY,
+  getCaptureGraveyardPosition
 }: UsePieceAnimationOptions) => {
+  const getEnPassantCapturedSquare = (from: string, to: string) => {
+    const toFile = to[0];
+    const fromRank = from[1];
+    if (!toFile || !fromRank) return null;
+    return `${toFile}${fromRank}`;
+  };
+
   const updatePieceMap = (mesh: THREE.Object3D, from: string, to: string) => {
     pieceMeshes.delete(from);
     pieceMeshes.set(to, mesh);
@@ -37,12 +46,18 @@ export const usePieceAnimation = ({
     const graveyardX = isWhitePiece ? -6 : 6;
     const graveyardZ = isWhitePiece ? -2 : 2;
     const graveyardY = isWhitePiece ? whiteGraveyardY : blackGraveyardY;
+    const fallbackTarget = new THREE.Vector3(
+      graveyardX + (Math.random() - 0.5),
+      graveyardY,
+      graveyardZ + (Math.random() - 0.5)
+    );
+    const target = getCaptureGraveyardPosition ? getCaptureGraveyardPosition(mesh) : fallbackTarget;
 
     gsap.to(mesh.position, {
       duration: 0.8,
-      x: graveyardX + (Math.random() - 0.5),
+      x: target.x,
       y: graveyardY,
-      z: graveyardZ + (Math.random() - 0.5),
+      z: target.z,
       keyframes: {
         '0%': { y: mesh.position.y },
         '50%': { y: 3 },
@@ -108,9 +123,11 @@ export const usePieceAnimation = ({
     const targetPos = getTargetPositionForPiece(pieceMesh, to);
 
     if (captured) {
-      const capturedPiece = pieceMeshes.get(to);
+      const captureSquare = flags.includes('e') ? getEnPassantCapturedSquare(from, to) : to;
+      if (!captureSquare) return;
+      const capturedPiece = pieceMeshes.get(captureSquare);
       if (capturedPiece) {
-        animateCapture(capturedPiece, to);
+        animateCapture(capturedPiece, captureSquare);
       }
     }
 

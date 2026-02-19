@@ -79,6 +79,7 @@ const createBoard = () => {
     new THREE.MeshStandardMaterial({ color: 0x6f4b2f, roughness: 0.75 })
   );
   base.position.y = -0.35;
+  base.castShadow = false;
   base.receiveShadow = true;
   boardGroup.add(base);
 
@@ -87,6 +88,7 @@ const createBoard = () => {
     new THREE.MeshStandardMaterial({ color: 0xc7965e, roughness: 0.9 })
   );
   top.rotation.x = -Math.PI / 2;
+  top.castShadow = false;
   top.receiveShadow = true;
   boardGroup.add(top);
 

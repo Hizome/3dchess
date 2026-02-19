@@ -32,21 +32,28 @@ class Pao extends Piece {
       let currentPoint = square.point().add(vector);
       let currentSquare = gameState.squares.findByCoordinate(currentPoint.x, currentPoint.y);
 
-      // iterate through unoccupied squares until end of board or occupied opponent square is reached
+      // Step 1: move until the first occupied square (the screen / pao-jia).
       while (exists(currentSquare) && currentSquare.unoccupied()) {
         currentPoint = currentSquare.point().add(vector);
         currentSquare = gameState.squares.findByCoordinate(currentPoint.x, currentPoint.y);
       }
 
-      // find the next square after the occupied square
-      if (exists(currentSquare) && currentSquare.occupiedByOpponentOf(this.playerNumber)) {
-        let nextPoint = currentSquare.point().add(vector);
-        let nextSquare = gameState.squares.findByCoordinate(nextPoint.x, nextPoint.y);
+      // No screen in this direction => no capture.
+      if (!exists(currentSquare) || currentSquare.unoccupied()) {
+        return;
+      }
 
-        // add the next square if it's unoccupied
-        if (exists(nextSquare) && nextSquare.unoccupied()) { 
-          _squares.push(nextSquare); 
-        }
+      // Step 2: from the square after screen, find the first occupied square.
+      let nextPoint = currentSquare.point().add(vector);
+      let nextSquare = gameState.squares.findByCoordinate(nextPoint.x, nextPoint.y);
+      while (exists(nextSquare) && nextSquare.unoccupied()) {
+        nextPoint = nextSquare.point().add(vector);
+        nextSquare = gameState.squares.findByCoordinate(nextPoint.x, nextPoint.y);
+      }
+
+      // Step 3: capture is valid only if that first occupied square is opponent.
+      if (exists(nextSquare) && nextSquare.occupiedByOpponentOf(this.playerNumber)) {
+        _squares.push(nextSquare);
       }
     });
     return new SquareSet({squares: _squares});
@@ -54,4 +61,3 @@ class Pao extends Piece {
 }
 
 export default Pao 
-

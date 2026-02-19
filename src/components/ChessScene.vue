@@ -6,25 +6,6 @@
       @undo="handleUndo"
       @restart="handleRestart"
     />
-
-    <KnightDebugPanel
-      :black-scale="blackKnightScale"
-      :black-offset-x="blackKnightOffsetX"
-      :black-offset-y="blackKnightOffsetY"
-      :black-offset-z="blackKnightOffsetZ"
-      :white-scale="whiteKnightScale"
-      :white-offset-x="whiteKnightOffsetX"
-      :white-offset-y="whiteKnightOffsetY"
-      :white-offset-z="whiteKnightOffsetZ"
-      @black-scale="adjustBlackKnightScale"
-      @black-offset-x="adjustBlackKnightOffsetX"
-      @black-offset-y="adjustBlackKnightOffsetY"
-      @black-offset-z="adjustBlackKnightOffsetZ"
-      @white-scale="adjustWhiteKnightScale"
-      @white-offset-x="adjustWhiteKnightOffsetX"
-      @white-offset-y="adjustWhiteKnightOffsetY"
-      @white-offset-z="adjustWhiteKnightOffsetZ"
-    />
   </div>
 </template>
 
@@ -36,9 +17,7 @@ import { GameLogic } from '../logic/GameLogic';
 import { AssetManager } from '../utils/AssetManager';
 import gsap from 'gsap';
 import MoveHistoryPanel from './chessscene/MoveHistoryPanel.vue';
-import KnightDebugPanel from './chessscene/KnightDebugPanel.vue';
 import { useMoveHistory } from './chessscene/useMoveHistory';
-import { useKnightDebug } from './chessscene/useKnightDebug';
 import { usePieceAnimation } from './chessscene/usePieceAnimation';
 import { useMoveInteraction } from './chessscene/useMoveInteraction';
 import {
@@ -78,6 +57,12 @@ import blackRookModelUrl from '../assets/br.glb?url';
 import whiteRookModelUrl from '../assets/wr.glb?url';
 import blackKnightModelUrl from '../assets/bn.glb?url';
 import whiteKnightModelUrl from '../assets/wn.glb?url';
+import blackBishopModelUrl from '../assets/bb.glb?url';
+import whiteBishopModelUrl from '../assets/wb.glb?url';
+import blackKingModelUrl from '../assets/bk.glb?url';
+import whiteKingModelUrl from '../assets/wk.glb?url';
+import blackQueenModelUrl from '../assets/bq.glb?url';
+import whiteQueenModelUrl from '../assets/wq.glb?url';
 
 const props = defineProps<{
   playerColor: string;
@@ -108,6 +93,12 @@ let blackRookTemplate: THREE.Group | null = null;
 let whiteRookTemplate: THREE.Group | null = null;
 let blackKnightTemplate: THREE.Group | null = null;
 let whiteKnightTemplate: THREE.Group | null = null;
+let blackBishopTemplate: THREE.Group | null = null;
+let whiteBishopTemplate: THREE.Group | null = null;
+let blackKingTemplate: THREE.Group | null = null;
+let whiteKingTemplate: THREE.Group | null = null;
+let blackQueenTemplate: THREE.Group | null = null;
+let whiteQueenTemplate: THREE.Group | null = null;
 
 // Camera positioning
 const WHITE_POS = new THREE.Vector3(0, 8, 8);
@@ -116,24 +107,44 @@ const LOOKAT = new THREE.Vector3(0, 0, 0);
 const gameLogic = new GameLogic();
 const assetManager = new AssetManager();
 const { moveHistoryRows, canUndo, syncMoveHistory } = useMoveHistory(gameLogic);
-const {
-  blackKnightScale,
-  blackKnightOffsetX,
-  blackKnightOffsetY,
-  blackKnightOffsetZ,
-  whiteKnightScale,
-  whiteKnightOffsetX,
-  whiteKnightOffsetY,
-  whiteKnightOffsetZ,
-  adjustBlackKnightScale,
-  adjustBlackKnightOffsetX,
-  adjustBlackKnightOffsetY,
-  adjustBlackKnightOffsetZ,
-  adjustWhiteKnightScale,
-  adjustWhiteKnightOffsetX,
-  adjustWhiteKnightOffsetY,
-  adjustWhiteKnightOffsetZ
-} = useKnightDebug(() => updateKnightTransformsInScene());
+const BLACK_KNIGHT_SCALE = 28;
+const BLACK_KNIGHT_OFFSET_X = 3.45;
+const BLACK_KNIGHT_OFFSET_Y = -1.1;
+const BLACK_KNIGHT_OFFSET_Z = 2.45;
+const WHITE_KNIGHT_SCALE = 28;
+const WHITE_KNIGHT_OFFSET_X = 0.45;
+const WHITE_KNIGHT_OFFSET_Y = -1.1;
+const WHITE_KNIGHT_OFFSET_Z = -4.25;
+const BLACK_BISHOP_SCALE = 28;
+const BLACK_BISHOP_OFFSET_X = -3.5;
+const BLACK_BISHOP_OFFSET_Y = -1.1;
+const BLACK_BISHOP_OFFSET_Z = -1.45;
+const WHITE_BISHOP_SCALE = 28;
+const WHITE_BISHOP_OFFSET_X = 3.5;
+const WHITE_BISHOP_OFFSET_Y = -1.1;
+const WHITE_BISHOP_OFFSET_Z = 1.4;
+const BLACK_KING_SCALE = 28;
+const BLACK_KING_OFFSET_X = 0.05;
+const BLACK_KING_OFFSET_Y = -1.1;
+const BLACK_KING_OFFSET_Z = 3.5;
+const BLACK_KING_ROT_X = 0;
+const BLACK_KING_ROT_Y = 100;
+const BLACK_KING_ROT_Z = 0;
+const WHITE_KING_SCALE = 28;
+const WHITE_KING_OFFSET_X = -0.05;
+const WHITE_KING_OFFSET_Y = -1.1;
+const WHITE_KING_OFFSET_Z = -3.5;
+const WHITE_KING_ROT_X = 0;
+const WHITE_KING_ROT_Y = 100;
+const WHITE_KING_ROT_Z = 0;
+const BLACK_QUEEN_SCALE = 28;
+const BLACK_QUEEN_OFFSET_X = -3.45;
+const BLACK_QUEEN_OFFSET_Y = -1.1;
+const BLACK_QUEEN_OFFSET_Z = 0.55;
+const WHITE_QUEEN_SCALE = 28;
+const WHITE_QUEEN_OFFSET_X = 3.45;
+const WHITE_QUEEN_OFFSET_Y = -1.1;
+const WHITE_QUEEN_OFFSET_Z = -0.6;
 
 const initScene = async () => {
   if (!container.value) return;
@@ -192,6 +203,12 @@ const initScene = async () => {
   await loadWhiteRookTemplate();
   await loadBlackKnightTemplate();
   await loadWhiteKnightTemplate();
+  await loadBlackBishopTemplate();
+  await loadWhiteBishopTemplate();
+  await loadBlackKingTemplate();
+  await loadWhiteKingTemplate();
+  await loadBlackQueenTemplate();
+  await loadWhiteQueenTemplate();
   
   // Placeholder Pieces
   createPlaceholderPieces();
@@ -226,7 +243,7 @@ const loadBoardModel = async () => {
     boardModel.traverse((obj) => {
       if ((obj as THREE.Mesh).isMesh) {
         const mesh = obj as THREE.Mesh;
-        mesh.castShadow = true;
+        mesh.castShadow = false;
         mesh.receiveShadow = true;
       }
     });
@@ -332,6 +349,102 @@ const loadWhiteKnightTemplate = async () => {
   }
 };
 
+const loadBlackBishopTemplate = async () => {
+  try {
+    blackBishopTemplate = await assetManager.loadModel(blackBishopModelUrl);
+    blackBishopTemplate.traverse((obj) => {
+      if ((obj as THREE.Mesh).isMesh) {
+        const mesh = obj as THREE.Mesh;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+      }
+    });
+  } catch (err) {
+    blackBishopTemplate = null;
+    console.warn('Failed to load black bishop model, fallback to placeholder piece.', err);
+  }
+};
+
+const loadWhiteBishopTemplate = async () => {
+  try {
+    whiteBishopTemplate = await assetManager.loadModel(whiteBishopModelUrl);
+    whiteBishopTemplate.traverse((obj) => {
+      if ((obj as THREE.Mesh).isMesh) {
+        const mesh = obj as THREE.Mesh;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+      }
+    });
+  } catch (err) {
+    whiteBishopTemplate = null;
+    console.warn('Failed to load white bishop model, fallback to placeholder piece.', err);
+  }
+};
+
+const loadBlackKingTemplate = async () => {
+  try {
+    blackKingTemplate = await assetManager.loadModel(blackKingModelUrl);
+    blackKingTemplate.traverse((obj) => {
+      if ((obj as THREE.Mesh).isMesh) {
+        const mesh = obj as THREE.Mesh;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+      }
+    });
+  } catch (err) {
+    blackKingTemplate = null;
+    console.warn('Failed to load black queen model, fallback to placeholder piece.', err);
+  }
+};
+
+const loadWhiteKingTemplate = async () => {
+  try {
+    whiteKingTemplate = await assetManager.loadModel(whiteKingModelUrl);
+    whiteKingTemplate.traverse((obj) => {
+      if ((obj as THREE.Mesh).isMesh) {
+        const mesh = obj as THREE.Mesh;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+      }
+    });
+  } catch (err) {
+    whiteKingTemplate = null;
+    console.warn('Failed to load white queen model, fallback to placeholder piece.', err);
+  }
+};
+
+const loadBlackQueenTemplate = async () => {
+  try {
+    blackQueenTemplate = await assetManager.loadModel(blackQueenModelUrl);
+    blackQueenTemplate.traverse((obj) => {
+      if ((obj as THREE.Mesh).isMesh) {
+        const mesh = obj as THREE.Mesh;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+      }
+    });
+  } catch (err) {
+    blackQueenTemplate = null;
+    console.warn('Failed to load black queen model, fallback to placeholder piece.', err);
+  }
+};
+
+const loadWhiteQueenTemplate = async () => {
+  try {
+    whiteQueenTemplate = await assetManager.loadModel(whiteQueenModelUrl);
+    whiteQueenTemplate.traverse((obj) => {
+      if ((obj as THREE.Mesh).isMesh) {
+        const mesh = obj as THREE.Mesh;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+      }
+    });
+  } catch (err) {
+    whiteQueenTemplate = null;
+    console.warn('Failed to load white queen model, fallback to placeholder piece.', err);
+  }
+};
+
 const applyBlackPawnTransform = (pieceObject: THREE.Object3D, squareId: string) => {
   const squarePos = getSquareCenterPosition(squareId);
   pieceObject.position.set(
@@ -375,23 +488,95 @@ const applyBlackRookTransform = (pieceObject: THREE.Object3D, squareId: string) 
 const applyBlackKnightTransform = (pieceObject: THREE.Object3D, squareId: string) => {
   const squarePos = getSquareCenterPosition(squareId);
   pieceObject.position.set(
-    squarePos.x + blackKnightOffsetX.value,
-    blackKnightOffsetY.value,
-    squarePos.z + blackKnightOffsetZ.value
+    squarePos.x + BLACK_KNIGHT_OFFSET_X,
+    BLACK_KNIGHT_OFFSET_Y,
+    squarePos.z + BLACK_KNIGHT_OFFSET_Z
   );
-  pieceObject.scale.setScalar(blackKnightScale.value);
+  pieceObject.scale.setScalar(BLACK_KNIGHT_SCALE);
   pieceObject.rotation.set(BLACK_KNIGHT_ROT_X, BLACK_KNIGHT_ROT_Y, BLACK_KNIGHT_ROT_Z, 'ZYX');
 };
 
 const applyWhiteKnightTransform = (pieceObject: THREE.Object3D, squareId: string) => {
   const squarePos = getSquareCenterPosition(squareId);
   pieceObject.position.set(
-    squarePos.x + whiteKnightOffsetX.value,
-    whiteKnightOffsetY.value,
-    squarePos.z + whiteKnightOffsetZ.value
+    squarePos.x + WHITE_KNIGHT_OFFSET_X,
+    WHITE_KNIGHT_OFFSET_Y,
+    squarePos.z + WHITE_KNIGHT_OFFSET_Z
   );
-  pieceObject.scale.setScalar(whiteKnightScale.value);
+  pieceObject.scale.setScalar(WHITE_KNIGHT_SCALE);
   pieceObject.rotation.set(WHITE_KNIGHT_ROT_X, WHITE_KNIGHT_ROT_Y, WHITE_KNIGHT_ROT_Z, 'ZYX');
+};
+
+const applyBlackBishopTransform = (pieceObject: THREE.Object3D, squareId: string) => {
+  const squarePos = getSquareCenterPosition(squareId);
+  pieceObject.position.set(
+    squarePos.x + BLACK_BISHOP_OFFSET_X,
+    BLACK_BISHOP_OFFSET_Y,
+    squarePos.z + BLACK_BISHOP_OFFSET_Z
+  );
+  pieceObject.scale.setScalar(BLACK_BISHOP_SCALE);
+};
+
+const applyWhiteBishopTransform = (pieceObject: THREE.Object3D, squareId: string) => {
+  const squarePos = getSquareCenterPosition(squareId);
+  pieceObject.position.set(
+    squarePos.x + WHITE_BISHOP_OFFSET_X,
+    WHITE_BISHOP_OFFSET_Y,
+    squarePos.z + WHITE_BISHOP_OFFSET_Z
+  );
+  pieceObject.scale.setScalar(WHITE_BISHOP_SCALE);
+};
+
+const applyBlackKingTransform = (pieceObject: THREE.Object3D, squareId: string) => {
+  const squarePos = getSquareCenterPosition(squareId);
+  pieceObject.position.set(
+    squarePos.x + BLACK_KING_OFFSET_X,
+    BLACK_KING_OFFSET_Y,
+    squarePos.z + BLACK_KING_OFFSET_Z
+  );
+  pieceObject.scale.setScalar(BLACK_KING_SCALE);
+  pieceObject.rotation.set(
+    THREE.MathUtils.degToRad(BLACK_KING_ROT_X),
+    THREE.MathUtils.degToRad(BLACK_KING_ROT_Y),
+    THREE.MathUtils.degToRad(BLACK_KING_ROT_Z),
+    'ZYX'
+  );
+};
+
+const applyWhiteKingTransform = (pieceObject: THREE.Object3D, squareId: string) => {
+  const squarePos = getSquareCenterPosition(squareId);
+  pieceObject.position.set(
+    squarePos.x + WHITE_KING_OFFSET_X,
+    WHITE_KING_OFFSET_Y,
+    squarePos.z + WHITE_KING_OFFSET_Z
+  );
+  pieceObject.scale.setScalar(WHITE_KING_SCALE);
+  pieceObject.rotation.set(
+    THREE.MathUtils.degToRad(WHITE_KING_ROT_X),
+    THREE.MathUtils.degToRad(WHITE_KING_ROT_Y),
+    THREE.MathUtils.degToRad(WHITE_KING_ROT_Z),
+    'ZYX'
+  );
+};
+
+const applyBlackQueenTransform = (pieceObject: THREE.Object3D, squareId: string) => {
+  const squarePos = getSquareCenterPosition(squareId);
+  pieceObject.position.set(
+    squarePos.x + BLACK_QUEEN_OFFSET_X,
+    BLACK_QUEEN_OFFSET_Y,
+    squarePos.z + BLACK_QUEEN_OFFSET_Z
+  );
+  pieceObject.scale.setScalar(BLACK_QUEEN_SCALE);
+};
+
+const applyWhiteQueenTransform = (pieceObject: THREE.Object3D, squareId: string) => {
+  const squarePos = getSquareCenterPosition(squareId);
+  pieceObject.position.set(
+    squarePos.x + WHITE_QUEEN_OFFSET_X,
+    WHITE_QUEEN_OFFSET_Y,
+    squarePos.z + WHITE_QUEEN_OFFSET_Z
+  );
+  pieceObject.scale.setScalar(WHITE_QUEEN_SCALE);
 };
 
 const createPieceObjectForSquare = (pieceType: string, pieceColor: string, squareId: string): THREE.Object3D => {
@@ -457,6 +642,66 @@ const createPieceObjectForSquare = (pieceType: string, pieceColor: string, squar
     return pieceObject;
   }
 
+  if (pieceColor === 'b' && pieceType === 'b' && blackBishopTemplate) {
+    pieceObject = blackBishopTemplate.clone(true);
+    pieceObject.userData = { square: squareId, color: pieceColor, type: pieceType, modelType: 'blackBishopGlb' };
+    pieceObject.traverse((obj) => {
+      obj.userData = { square: squareId, color: pieceColor, type: pieceType, modelType: 'blackBishopGlb' };
+    });
+    applyBlackBishopTransform(pieceObject, squareId);
+    return pieceObject;
+  }
+
+  if (pieceColor === 'w' && pieceType === 'b' && whiteBishopTemplate) {
+    pieceObject = whiteBishopTemplate.clone(true);
+    pieceObject.userData = { square: squareId, color: pieceColor, type: pieceType, modelType: 'whiteBishopGlb' };
+    pieceObject.traverse((obj) => {
+      obj.userData = { square: squareId, color: pieceColor, type: pieceType, modelType: 'whiteBishopGlb' };
+    });
+    applyWhiteBishopTransform(pieceObject, squareId);
+    return pieceObject;
+  }
+
+  if (pieceColor === 'b' && pieceType === 'k' && blackKingTemplate) {
+    pieceObject = blackKingTemplate.clone(true);
+    pieceObject.userData = { square: squareId, color: pieceColor, type: pieceType, modelType: 'blackKingGlb' };
+    pieceObject.traverse((obj) => {
+      obj.userData = { square: squareId, color: pieceColor, type: pieceType, modelType: 'blackKingGlb' };
+    });
+    applyBlackKingTransform(pieceObject, squareId);
+    return pieceObject;
+  }
+
+  if (pieceColor === 'w' && pieceType === 'k' && whiteKingTemplate) {
+    pieceObject = whiteKingTemplate.clone(true);
+    pieceObject.userData = { square: squareId, color: pieceColor, type: pieceType, modelType: 'whiteKingGlb' };
+    pieceObject.traverse((obj) => {
+      obj.userData = { square: squareId, color: pieceColor, type: pieceType, modelType: 'whiteKingGlb' };
+    });
+    applyWhiteKingTransform(pieceObject, squareId);
+    return pieceObject;
+  }
+
+  if (pieceColor === 'b' && pieceType === 'q' && blackQueenTemplate) {
+    pieceObject = blackQueenTemplate.clone(true);
+    pieceObject.userData = { square: squareId, color: pieceColor, type: pieceType, modelType: 'blackQueenGlb' };
+    pieceObject.traverse((obj) => {
+      obj.userData = { square: squareId, color: pieceColor, type: pieceType, modelType: 'blackQueenGlb' };
+    });
+    applyBlackQueenTransform(pieceObject, squareId);
+    return pieceObject;
+  }
+
+  if (pieceColor === 'w' && pieceType === 'q' && whiteQueenTemplate) {
+    pieceObject = whiteQueenTemplate.clone(true);
+    pieceObject.userData = { square: squareId, color: pieceColor, type: pieceType, modelType: 'whiteQueenGlb' };
+    pieceObject.traverse((obj) => {
+      obj.userData = { square: squareId, color: pieceColor, type: pieceType, modelType: 'whiteQueenGlb' };
+    });
+    applyWhiteQueenTransform(pieceObject, squareId);
+    return pieceObject;
+  }
+
   const geometry = new THREE.CylinderGeometry(0.3, 0.35, 0.8, 20);
   const material = new THREE.MeshStandardMaterial({
     color: pieceColor === PIECE_COLORS.WHITE ? 0xffffff : 0x333333,
@@ -485,6 +730,24 @@ const getGraveyardPosition = (capturedColor: string, capturedIndex: number) => {
   return new THREE.Vector3(x, y, z);
 };
 
+const getAdjustedGraveyardPositionForPiece = (pieceObject: THREE.Object3D, basePosition: THREE.Vector3) => {
+  const adjusted = basePosition.clone();
+  if (pieceObject.userData.modelType === 'blackKnightGlb') {
+    adjusted.x += BLACK_KNIGHT_OFFSET_X;
+    adjusted.z += BLACK_KNIGHT_OFFSET_Z;
+  }
+  return adjusted;
+};
+
+const getCaptureGraveyardPositionForPiece = (pieceObject: THREE.Object3D) => {
+  const capturedColor = pieceObject.userData.color === PIECE_COLORS.WHITE ? PIECE_COLORS.WHITE : PIECE_COLORS.BLACK;
+  const baseX = capturedColor === PIECE_COLORS.WHITE ? -6 : 6;
+  const baseZ = capturedColor === PIECE_COLORS.WHITE ? -2 : 2;
+  const baseY = capturedColor === PIECE_COLORS.WHITE ? WHITE_GRAVEYARD_OFFSET_Y : BLACK_GRAVEYARD_OFFSET_Y;
+  const basePosition = new THREE.Vector3(baseX + (Math.random() - 0.5), baseY, baseZ + (Math.random() - 0.5));
+  return getAdjustedGraveyardPositionForPiece(pieceObject, basePosition);
+};
+
 const rebuildGraveyardFromHistory = () => {
   const history = gameLogic.getHistory() as Array<{ color: string; captured?: string; to: string }>;
   const capturedCount = { w: 0, b: 0 };
@@ -494,21 +757,10 @@ const rebuildGraveyardFromHistory = () => {
     const capturedColor = move.color === PIECE_COLORS.WHITE ? PIECE_COLORS.BLACK : PIECE_COLORS.WHITE;
     const index = capturedColor === PIECE_COLORS.WHITE ? capturedCount.w++ : capturedCount.b++;
     const capturedPiece = createPieceObjectForSquare(move.captured, capturedColor, move.to);
-    capturedPiece.position.copy(getGraveyardPosition(capturedColor, index));
+    const basePosition = getGraveyardPosition(capturedColor, index);
+    capturedPiece.position.copy(getAdjustedGraveyardPositionForPiece(capturedPiece, basePosition));
     capturedPiece.userData.isCaptured = true;
     piecesGroup.add(capturedPiece);
-  });
-};
-
-const updateKnightTransformsInScene = () => {
-  pieceMeshes.forEach((pieceObject) => {
-    const squareId = pieceObject.userData.square as string | undefined;
-    if (!squareId) return;
-    if (pieceObject.userData.modelType === 'blackKnightGlb') {
-      applyBlackKnightTransform(pieceObject, squareId);
-    } else if (pieceObject.userData.modelType === 'whiteKnightGlb') {
-      applyWhiteKnightTransform(pieceObject, squareId);
-    }
   });
 };
 
@@ -548,10 +800,11 @@ const createHighlightLayer = () => {
 const getTargetPositionForPiece = (pieceObject: THREE.Object3D, squareId: string) => {
   const col = squareId.charCodeAt(0) - 97;
   const row = 8 - parseInt(squareId.slice(1), 10);
+  const baseX = col - 3.5;
 
   if (pieceObject.userData.modelType === 'blackPawnGlb') {
     return new THREE.Vector3(
-      col - 3.5 + BLACK_PAWN_OFFSET_X,
+      baseX + BLACK_PAWN_OFFSET_X,
       BLACK_PAWN_OFFSET_Y,
       row - 3.5 + BLACK_PAWN_OFFSET_Z
     );
@@ -559,7 +812,7 @@ const getTargetPositionForPiece = (pieceObject: THREE.Object3D, squareId: string
 
   if (pieceObject.userData.modelType === 'blackRookGlb') {
     return new THREE.Vector3(
-      col - 3.5 + BLACK_ROOK_OFFSET_X,
+      baseX + BLACK_ROOK_OFFSET_X,
       BLACK_ROOK_OFFSET_Y,
       row - 3.5 + BLACK_ROOK_OFFSET_Z
     );
@@ -567,7 +820,7 @@ const getTargetPositionForPiece = (pieceObject: THREE.Object3D, squareId: string
 
   if (pieceObject.userData.modelType === 'whitePawnGlb') {
     return new THREE.Vector3(
-      col - 3.5 + WHITE_PAWN_OFFSET_X,
+      baseX + WHITE_PAWN_OFFSET_X,
       WHITE_PAWN_OFFSET_Y,
       row - 3.5 + WHITE_PAWN_OFFSET_Z
     );
@@ -575,7 +828,7 @@ const getTargetPositionForPiece = (pieceObject: THREE.Object3D, squareId: string
 
   if (pieceObject.userData.modelType === 'whiteRookGlb') {
     return new THREE.Vector3(
-      col - 3.5 + WHITE_ROOK_OFFSET_X,
+      baseX + WHITE_ROOK_OFFSET_X,
       WHITE_ROOK_OFFSET_Y,
       row - 3.5 + WHITE_ROOK_OFFSET_Z
     );
@@ -583,21 +836,69 @@ const getTargetPositionForPiece = (pieceObject: THREE.Object3D, squareId: string
 
   if (pieceObject.userData.modelType === 'blackKnightGlb') {
     return new THREE.Vector3(
-      col - 3.5 + blackKnightOffsetX.value,
-      blackKnightOffsetY.value,
-      row - 3.5 + blackKnightOffsetZ.value
+      baseX + BLACK_KNIGHT_OFFSET_X,
+      BLACK_KNIGHT_OFFSET_Y,
+      row - 3.5 + BLACK_KNIGHT_OFFSET_Z
     );
   }
 
   if (pieceObject.userData.modelType === 'whiteKnightGlb') {
     return new THREE.Vector3(
-      col - 3.5 + whiteKnightOffsetX.value,
-      whiteKnightOffsetY.value,
-      row - 3.5 + whiteKnightOffsetZ.value
+      baseX + WHITE_KNIGHT_OFFSET_X,
+      WHITE_KNIGHT_OFFSET_Y,
+      row - 3.5 + WHITE_KNIGHT_OFFSET_Z
     );
   }
 
-  return new THREE.Vector3(col - 3.5, 0.4, row - 3.5);
+  if (pieceObject.userData.modelType === 'blackBishopGlb') {
+    return new THREE.Vector3(
+      baseX + BLACK_BISHOP_OFFSET_X,
+      BLACK_BISHOP_OFFSET_Y,
+      row - 3.5 + BLACK_BISHOP_OFFSET_Z
+    );
+  }
+
+  if (pieceObject.userData.modelType === 'whiteBishopGlb') {
+    return new THREE.Vector3(
+      baseX + WHITE_BISHOP_OFFSET_X,
+      WHITE_BISHOP_OFFSET_Y,
+      row - 3.5 + WHITE_BISHOP_OFFSET_Z
+    );
+  }
+
+  if (pieceObject.userData.modelType === 'blackKingGlb') {
+    return new THREE.Vector3(
+      baseX + BLACK_KING_OFFSET_X,
+      BLACK_KING_OFFSET_Y,
+      row - 3.5 + BLACK_KING_OFFSET_Z
+    );
+  }
+
+  if (pieceObject.userData.modelType === 'whiteKingGlb') {
+    return new THREE.Vector3(
+      baseX + WHITE_KING_OFFSET_X,
+      WHITE_KING_OFFSET_Y,
+      row - 3.5 + WHITE_KING_OFFSET_Z
+    );
+  }
+
+  if (pieceObject.userData.modelType === 'blackQueenGlb') {
+    return new THREE.Vector3(
+      baseX + BLACK_QUEEN_OFFSET_X,
+      BLACK_QUEEN_OFFSET_Y,
+      row - 3.5 + BLACK_QUEEN_OFFSET_Z
+    );
+  }
+
+  if (pieceObject.userData.modelType === 'whiteQueenGlb') {
+    return new THREE.Vector3(
+      baseX + WHITE_QUEEN_OFFSET_X,
+      WHITE_QUEEN_OFFSET_Y,
+      row - 3.5 + WHITE_QUEEN_OFFSET_Z
+    );
+  }
+
+  return new THREE.Vector3(baseX, 0.4, row - 3.5);
 };
 
 const createPlaceholderPieces = () => {
@@ -630,7 +931,8 @@ const { animateMove } = usePieceAnimation({
   pieceMeshes,
   getTargetPositionForPiece,
   whiteGraveyardY: WHITE_GRAVEYARD_OFFSET_Y,
-  blackGraveyardY: BLACK_GRAVEYARD_OFFSET_Y
+  blackGraveyardY: BLACK_GRAVEYARD_OFFSET_Y,
+  getCaptureGraveyardPosition: getCaptureGraveyardPositionForPiece
 });
 
 const { onMouseDown, onMouseMove, cancelSelection } = useMoveInteraction({

@@ -16,6 +16,14 @@
         :autoRotate="autoRotate"
         @turn-changed="handleTurnChange"
       />
+
+      <GoScene
+        v-else-if="gameStarted && gameMode === 'go'"
+        :playerColor="playerColor"
+        :isLocked="isCameraLocked"
+        :autoRotate="autoRotate"
+        @turn-changed="handleTurnChange"
+      />
       
       <!-- Main Menu -->
       <div v-else class="menu-overlay">
@@ -26,6 +34,9 @@
           </div>
           <div class="menu-section">
             <button @click="startXiangqiGame" class="menu-btn primary-btn">Play Xiangqi</button>
+          </div>
+          <div class="menu-section">
+            <button @click="startGoGame" class="menu-btn primary-btn">Play Go</button>
           </div>
           <button class="settings-icon-btn" @click="showSettings = true">⚙️ Settings</button>
         </div>
@@ -100,10 +111,11 @@
 import { computed, ref, watch } from 'vue';
 import ChessScene from './components/ChessScene.vue';
 import XiangqiScene from './components/XiangqiScene.vue';
+import GoScene from './components/GoScene.vue';
 import SettingsModal from './components/SettingsModal.vue';
 
 const gameStarted = ref(false);
-const gameMode = ref<'chess' | 'xiangqi' | null>(null);
+const gameMode = ref<'chess' | 'xiangqi' | 'go' | null>(null);
 const playerColor = ref('white'); 
 const isCameraLocked = ref(true);
 const showSettings = ref(false);
@@ -112,11 +124,13 @@ const showCameraOptions = ref(false);
 const currentTheme = ref('dark');
 
 const topLeftPlayerLabel = computed(() => {
+  if (gameMode.value === 'go') return '👤 Player 2 (White)';
   if (gameMode.value === 'xiangqi') return '👤 Player 2 (Black)';
   return '👤 Player 2 (Black)';
 });
 
 const topRightPlayerLabel = computed(() => {
+  if (gameMode.value === 'go') return '👤 Player 1 (Black)';
   if (gameMode.value === 'xiangqi') return '👤 Player 1 (Red)';
   return '👤 Player 1 (White)';
 });
@@ -135,6 +149,13 @@ const startChessGame = () => {
 const startXiangqiGame = () => {
   gameMode.value = 'xiangqi';
   playerColor.value = 'white'; 
+  isCameraLocked.value = true;
+  gameStarted.value = true;
+};
+
+const startGoGame = () => {
+  gameMode.value = 'go';
+  playerColor.value = 'white';
   isCameraLocked.value = true;
   gameStarted.value = true;
 };
