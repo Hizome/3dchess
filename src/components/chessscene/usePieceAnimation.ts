@@ -6,6 +6,7 @@ export type ChessMove = {
   to: string;
   piece: string;
   captured?: string;
+  promotion?: string;
   flags: string;
   color: string;
 };

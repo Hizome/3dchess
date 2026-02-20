@@ -6,6 +6,21 @@
       @undo="handleUndo"
       @restart="handleRestart"
     />
+    <div v-if="pendingPromotion" class="promotion-modal-backdrop">
+      <div class="promotion-modal">
+        <div class="promotion-title">Choose Promotion</div>
+        <div class="promotion-subtitle">
+          {{ pendingPromotion.color === 'w' ? 'White' : 'Black' }} pawn promotion
+        </div>
+        <div class="promotion-actions">
+          <button type="button" class="promotion-btn" @click="confirmPromotion('q')">Queen</button>
+          <button type="button" class="promotion-btn" @click="confirmPromotion('r')">Rook</button>
+          <button type="button" class="promotion-btn" @click="confirmPromotion('b')">Bishop</button>
+          <button type="button" class="promotion-btn" @click="confirmPromotion('n')">Knight</button>
+        </div>
+        <button type="button" class="promotion-cancel" @click="cancelPromotion">Cancel</button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -19,6 +34,7 @@ import gsap from 'gsap';
 import MoveHistoryPanel from './chessscene/MoveHistoryPanel.vue';
 import { useMoveHistory } from './chessscene/useMoveHistory';
 import { usePieceAnimation } from './chessscene/usePieceAnimation';
+import type { ChessMove } from './chessscene/usePieceAnimation';
 import { useMoveInteraction } from './chessscene/useMoveInteraction';
 import {
   BLACK_GRAVEYARD_OFFSET_Y,
@@ -99,6 +115,7 @@ let blackKingTemplate: THREE.Group | null = null;
 let whiteKingTemplate: THREE.Group | null = null;
 let blackQueenTemplate: THREE.Group | null = null;
 let whiteQueenTemplate: THREE.Group | null = null;
+let promotionRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 
 // Camera positioning
 const WHITE_POS = new THREE.Vector3(0, 8, 8);
@@ -107,6 +124,7 @@ const LOOKAT = new THREE.Vector3(0, 0, 0);
 const gameLogic = new GameLogic();
 const assetManager = new AssetManager();
 const { moveHistoryRows, canUndo, syncMoveHistory } = useMoveHistory(gameLogic);
+const pendingPromotion = ref<{ from: string; to: string; color: 'w' | 'b' } | null>(null);
 const BLACK_KNIGHT_SCALE = 28;
 const BLACK_KNIGHT_OFFSET_X = 3.45;
 const BLACK_KNIGHT_OFFSET_Y = -1.1;
@@ -221,6 +239,11 @@ const handleUndo = () => {
   const undone = gameLogic.undoMove();
   if (!undone) return;
 
+  if (promotionRefreshTimer) {
+    clearTimeout(promotionRefreshTimer);
+    promotionRefreshTimer = null;
+  }
+  pendingPromotion.value = null;
   cancelSelection();
   createPlaceholderPieces();
   syncMoveHistory();
@@ -229,6 +252,11 @@ const handleUndo = () => {
 
 const handleRestart = () => {
   gameLogic.resetGame();
+  if (promotionRefreshTimer) {
+    clearTimeout(promotionRefreshTimer);
+    promotionRefreshTimer = null;
+  }
+  pendingPromotion.value = null;
   cancelSelection();
   createPlaceholderPieces();
   syncMoveHistory();
@@ -935,6 +963,64 @@ const { animateMove } = usePieceAnimation({
   getCaptureGraveyardPosition: getCaptureGraveyardPositionForPiece
 });
 
+const applySuccessfulMove = (move: ChessMove) => {
+  animateMove(move);
+  syncMoveHistory();
+  emit('turn-changed', gameLogic.getTurn());
+
+  // Promotion swaps piece type from pawn to selected piece; rebuild to refresh mesh/model type.
+  if (move.flags.includes('p') || Boolean(move.promotion)) {
+    if (promotionRefreshTimer) {
+      clearTimeout(promotionRefreshTimer);
+      promotionRefreshTimer = null;
+    }
+    promotionRefreshTimer = setTimeout(() => {
+      createPlaceholderPieces();
+      promotionRefreshTimer = null;
+    }, 850);
+  }
+};
+
+const getPieceAtSquare = (squareId: string) => {
+  const board = gameLogic.getBoard();
+  const col = squareId.charCodeAt(0) - 97;
+  const row = 8 - parseInt(squareId.slice(1), 10);
+  const boardRow = board[row];
+  if (!boardRow) return null;
+  return boardRow[col] ?? null;
+};
+
+const isPromotionTarget = (from: string, to: string) => {
+  const piece = getPieceAtSquare(from);
+  if (!piece || piece.type !== 'p') return false;
+  const targetRank = Number.parseInt(to.slice(1), 10);
+  if (piece.color === 'w') return targetRank === 8;
+  return targetRank === 1;
+};
+
+const requestMove = (from: string, to: string): ChessMove | null | 'pending' => {
+  if (isPromotionTarget(from, to)) {
+    const piece = getPieceAtSquare(from);
+    if (!piece) return null;
+    pendingPromotion.value = { from, to, color: piece.color };
+    return 'pending';
+  }
+  return gameLogic.makeMove(from, to) as ChessMove | null;
+};
+
+const confirmPromotion = (promotion: 'q' | 'r' | 'b' | 'n') => {
+  const pending = pendingPromotion.value;
+  if (!pending) return;
+  const move = gameLogic.makeMove(pending.from, pending.to, promotion) as ChessMove | null;
+  pendingPromotion.value = null;
+  if (!move) return;
+  applySuccessfulMove(move);
+};
+
+const cancelPromotion = () => {
+  pendingPromotion.value = null;
+};
+
 const { onMouseDown, onMouseMove, cancelSelection } = useMoveInteraction({
   gameLogic,
   pieceMeshes,
@@ -947,11 +1033,8 @@ const { onMouseDown, onMouseMove, cancelSelection } = useMoveInteraction({
   getHighlightGroup: () => highlightGroup,
   isLocked: () => props.isLocked,
   resolveSquareIdFromObject,
-  onMoveApplied: (move) => {
-    animateMove(move);
-    syncMoveHistory();
-    emit('turn-changed', gameLogic.getTurn());
-  }
+  requestMove,
+  onMoveApplied: applySuccessfulMove
 });
 
 const resetCameraPosition = () => {
@@ -1032,6 +1115,10 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  if (promotionRefreshTimer) {
+    clearTimeout(promotionRefreshTimer);
+    promotionRefreshTimer = null;
+  }
   window.removeEventListener('resize', handleResize);
   renderer.domElement.removeEventListener('mousedown', onMouseDown);
   renderer.domElement.removeEventListener('mousemove', onMouseMove);
@@ -1052,5 +1139,56 @@ onUnmounted(() => {
 
 canvas {
   display: block;
+}
+
+.promotion-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.promotion-modal {
+  width: 280px;
+  border-radius: 10px;
+  padding: 14px;
+  background: rgba(18, 18, 18, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #f2f2f2;
+}
+
+.promotion-title {
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.promotion-subtitle {
+  font-size: 12px;
+  color: #d0d0d0;
+  margin-bottom: 10px;
+}
+
+.promotion-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.promotion-btn,
+.promotion-cancel {
+  border: 1px solid #666;
+  background: #1f1f1f;
+  color: #f2f2f2;
+  border-radius: 6px;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+.promotion-cancel {
+  width: 100%;
 }
 </style>

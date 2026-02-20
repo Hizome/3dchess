@@ -17,6 +17,7 @@ type UseMoveInteractionOptions = {
   getHighlightGroup: () => THREE.Group;
   isLocked: () => boolean;
   resolveSquareIdFromObject: (object: THREE.Object3D) => string | null;
+  requestMove: (from: string, to: string) => ChessMove | null | 'pending';
   onMoveApplied: (move: ChessMove) => void;
 };
 
@@ -32,6 +33,7 @@ export const useMoveInteraction = ({
   getHighlightGroup,
   isLocked,
   resolveSquareIdFromObject,
+  requestMove,
   onMoveApplied
 }: UseMoveInteractionOptions) => {
   let selectedSquare: string | null = null;
@@ -199,7 +201,11 @@ export const useMoveInteraction = ({
       if (squareId === selectedSquare) {
         cancelSelection();
       } else {
-        const move = gameLogic.makeMove(selectedSquare, squareId) as ChessMove | null;
+        const move = requestMove(selectedSquare, squareId);
+        if (move === 'pending') {
+          cancelSelection();
+          return;
+        }
         if (move) {
           onMoveApplied(move);
           cancelSelection();

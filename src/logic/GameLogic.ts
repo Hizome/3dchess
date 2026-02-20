@@ -15,9 +15,9 @@ export class GameLogic {
         return this.game.turn();
     }
 
-    public makeMove(from: string, to: string) {
+    public makeMove(from: string, to: string, promotion?: 'q' | 'r' | 'b' | 'n') {
         try {
-            return this.game.move({ from, to });
+            return this.game.move({ from, to, promotion });
         } catch (e) {
             return null;
         }
