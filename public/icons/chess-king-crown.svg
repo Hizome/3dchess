@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Chess King Crown">
+  <rect width="64" height="64" rx="12" fill="#0f172a"/>
+  <path fill="#f8fafc" d="M29 10h6v6h5v6h-5v4h9l4 22H16l4-22h9v-4h-5v-6h5zM22 52h20v4H22z"/>
+</svg>
+

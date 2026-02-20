@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Chess Knight Outline">
+  <rect width="64" height="64" rx="12" fill="#111"/>
+  <path d="M44 52H19v-5c0-4 2.1-7.2 6-9.4l6.4-3.6l-6.3-8.6c-2.3-3.2-1.8-7.8 1.2-10.4l8.2-7.2c2.7-2.3 6.6-2.2 9.1.3l4.3 4.3l-4.6 4.6l-2.8-2.8l-3.6 3.1l4.5 6.3l-4.9 3.4l3.7 5.1l7.4 4.1c4.3 2.4 6.8 6 6.8 10.2V52h-6z" fill="none" stroke="#fff" stroke-width="3" stroke-linejoin="round"/>
+</svg>

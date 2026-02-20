@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Chess Queen Star">
+  <rect width="64" height="64" rx="12" fill="#1f2937"/>
+  <path fill="#f9fafb" d="M32 8l3.2 6.5L42 16l-5 4.9l1.2 6.9L32 24.5l-6.2 3.3l1.2-6.9L22 16l6.8-1.5z"/>
+  <path fill="#f9fafb" d="M20 48c0-6.8 4.8-12 12-12s12 5.2 12 12H20zm2 4h20v4H22z"/>
+</svg>
+
