@@ -1,13 +1,18 @@
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 
 export class AssetManager {
     private loader: GLTFLoader;
+    private dracoLoader: DRACOLoader;
     private static cache: Map<string, THREE.Group> = new Map();
     private static pendingLoads: Map<string, Promise<THREE.Group>> = new Map();
 
     constructor() {
         this.loader = new GLTFLoader();
+        this.dracoLoader = new DRACOLoader();
+        this.dracoLoader.setDecoderPath('/draco/');
+        this.loader.setDRACOLoader(this.dracoLoader);
     }
 
     public async loadModel(
