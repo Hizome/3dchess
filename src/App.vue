@@ -30,15 +30,25 @@
         <h1>3D Board Games</h1>
         <div class="menu-content">
           <div class="menu-section">
-            <button @click="startChessGame" class="menu-btn primary-btn">Play Chess</button>
+            <button @click="startChessGame" class="menu-btn primary-btn" :disabled="isLoading">Play Chess</button>
           </div>
           <div class="menu-section">
-            <button @click="startXiangqiGame" class="menu-btn primary-btn">Play Xiangqi</button>
+            <button @click="startXiangqiGame" class="menu-btn primary-btn" :disabled="isLoading">Play Xiangqi</button>
           </div>
           <div class="menu-section">
-            <button @click="startGoGame" class="menu-btn primary-btn">Play Go</button>
+            <button @click="startGoGame" class="menu-btn primary-btn" :disabled="isLoading">Play Go</button>
           </div>
           <button class="settings-icon-btn" @click="showSettings = true">⚙️ Settings</button>
+        </div>
+      </div>
+
+      <div v-if="isLoading" class="loading-overlay">
+        <div class="loading-card">
+          <div class="loading-title">Loading {{ loadingModeLabel }}</div>
+          <div class="loading-progress-text">{{ loadingProgress }}%</div>
+          <div class="loading-progress-track">
+            <div class="loading-progress-fill" :style="{ width: `${loadingProgress}%` }"></div>
+          </div>
         </div>
       </div>
 
@@ -113,6 +123,21 @@ import ChessScene from './components/ChessScene.vue';
 import XiangqiScene from './components/XiangqiScene.vue';
 import GoScene from './components/GoScene.vue';
 import SettingsModal from './components/SettingsModal.vue';
+import { AssetManager } from './utils/AssetManager';
+import boardModelUrl from './assets/Board.glb?url';
+import blackPawnModelUrl from './assets/bp.glb?url';
+import whitePawnModelUrl from './assets/wp.glb?url';
+import blackRookModelUrl from './assets/br.glb?url';
+import whiteRookModelUrl from './assets/wr.glb?url';
+import blackKnightModelUrl from './assets/bn.glb?url';
+import whiteKnightModelUrl from './assets/wn.glb?url';
+import blackBishopModelUrl from './assets/bb.glb?url';
+import whiteBishopModelUrl from './assets/wb.glb?url';
+import blackKingModelUrl from './assets/bk.glb?url';
+import whiteKingModelUrl from './assets/wk.glb?url';
+import blackQueenModelUrl from './assets/bq.glb?url';
+import whiteQueenModelUrl from './assets/wq.glb?url';
+import goBoardModelUrl from './assets/go_board.glb?url';
 
 const gameStarted = ref(false);
 const gameMode = ref<'chess' | 'xiangqi' | 'go' | null>(null);
@@ -122,6 +147,28 @@ const showSettings = ref(false);
 const autoRotate = ref(false);
 const showCameraOptions = ref(false);
 const currentTheme = ref('dark');
+const isLoading = ref(false);
+const loadingProgress = ref(0);
+const loadingMode = ref<'chess' | 'xiangqi' | 'go' | null>(null);
+const assetManager = new AssetManager();
+
+const CHESS_ASSET_URLS = [
+  boardModelUrl,
+  blackPawnModelUrl,
+  whitePawnModelUrl,
+  blackRookModelUrl,
+  whiteRookModelUrl,
+  blackKnightModelUrl,
+  whiteKnightModelUrl,
+  blackBishopModelUrl,
+  whiteBishopModelUrl,
+  blackKingModelUrl,
+  whiteKingModelUrl,
+  blackQueenModelUrl,
+  whiteQueenModelUrl
+];
+
+const GO_ASSET_URLS = [goBoardModelUrl];
 
 const topLeftPlayerLabel = computed(() => {
   if (gameMode.value === 'go') return '👤 Player 2 (White)';
@@ -135,30 +182,53 @@ const topRightPlayerLabel = computed(() => {
   return '👤 Player 1 (White)';
 });
 
+const loadingModeLabel = computed(() => {
+  if (loadingMode.value === 'go') return 'Go';
+  if (loadingMode.value === 'xiangqi') return 'Xiangqi';
+  if (loadingMode.value === 'chess') return 'Chess';
+  return 'Game';
+});
+
 watch(currentTheme, (newTheme: string) => {
   document.body.setAttribute('data-theme', newTheme === 'dark' ? '' : 'tokyo-night');
 });
 
-const startChessGame = () => {
-  gameMode.value = 'chess';
-  playerColor.value = 'white'; 
-  isCameraLocked.value = true;
-  gameStarted.value = true;
+const getAssetUrlsByMode = (mode: 'chess' | 'xiangqi' | 'go') => {
+  if (mode === 'chess') return CHESS_ASSET_URLS;
+  if (mode === 'go') return GO_ASSET_URLS;
+  return [];
 };
 
-const startXiangqiGame = () => {
-  gameMode.value = 'xiangqi';
-  playerColor.value = 'white'; 
-  isCameraLocked.value = true;
-  gameStarted.value = true;
-};
+const startGame = async (mode: 'chess' | 'xiangqi' | 'go') => {
+  if (isLoading.value) return;
 
-const startGoGame = () => {
-  gameMode.value = 'go';
+  isLoading.value = true;
+  loadingMode.value = mode;
+  loadingProgress.value = 0;
+
+  try {
+    const assets = getAssetUrlsByMode(mode);
+    await assetManager.preloadModels(assets, (progress) => {
+      loadingProgress.value = Math.max(0, Math.min(100, Math.round(progress * 100)));
+    });
+  } catch (error) {
+    console.warn(`Preloading assets failed for ${mode}, entering with runtime loading fallback.`, error);
+  }
+
+  loadingProgress.value = 100;
+  gameMode.value = mode;
   playerColor.value = 'white';
   isCameraLocked.value = true;
   gameStarted.value = true;
+
+  window.setTimeout(() => {
+    isLoading.value = false;
+  }, 120);
 };
+
+const startChessGame = () => startGame('chess');
+const startXiangqiGame = () => startGame('xiangqi');
+const startGoGame = () => startGame('go');
 
 const returnToMenu = () => {
   gameStarted.value = false;
@@ -296,6 +366,12 @@ body, html, #app {
 .menu-btn:hover {
   background: var(--primary-btn-hover);
   transform: translateY(-2px);
+}
+
+.menu-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .white-btn { background: var(--primary-btn); }
@@ -444,5 +520,50 @@ body, html, #app {
 .black-lock {
   background: #000000 !important;
   border: 4px solid #ffffff !important;
+}
+
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  background: rgba(6, 10, 18, 0.78);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+}
+
+.loading-card {
+  width: min(460px, 82vw);
+  padding: 1.1rem 1rem 1.2rem;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(16, 24, 36, 0.82);
+}
+
+.loading-title {
+  color: #eaf4ff;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.loading-progress-text {
+  color: #b8cadf;
+  font-size: 0.9rem;
+  margin: 0.45rem 0 0.6rem;
+}
+
+.loading-progress-track {
+  width: 100%;
+  height: 9px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.loading-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3d8fff, #7dc7ff);
+  transition: width 120ms ease-out;
 }
 </style>
