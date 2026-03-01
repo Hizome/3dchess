@@ -33,10 +33,10 @@
             <button @click="startChessGame" class="menu-btn primary-btn" :disabled="isLoading">Play Chess</button>
           </div>
           <div class="menu-section">
-            <button @click="startXiangqiGame" class="menu-btn primary-btn" :disabled="isLoading">Play Xiangqi</button>
+            <button @click="startGoGame" class="menu-btn primary-btn" :disabled="isLoading">Play Go</button>
           </div>
           <div class="menu-section">
-            <button @click="startGoGame" class="menu-btn primary-btn" :disabled="isLoading">Play Go</button>
+            <button @click="startXiangqiGame" class="menu-btn primary-btn" :disabled="isLoading">Play Xiangqi(beta)</button>
           </div>
           <button class="settings-icon-btn" @click="showSettings = true">⚙️ Settings</button>
         </div>
